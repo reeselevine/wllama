@@ -94,8 +94,10 @@ export interface WllamaChatMessage {
 }
 
 export interface AssetsPathConfig {
-  'single-thread/wllama.wasm': string;
-  'multi-thread/wllama.wasm'?: string;
+  'jspi/single-thread/wllama.wasm'?: string;
+  'jspi/multi-thread/wllama.wasm'?: string;
+  'asyncify/single-thread/wllama.wasm'?: string;
+  'asyncify/multi-thread/wllama.wasm'?: string;
 }
 
 export interface LoadModelConfig {
@@ -597,9 +599,18 @@ export class Wllama {
         );
       }
     }
+    // detec if we can use JSPI
+    const hasJspi = 'Suspending' in WebAssembly;
+    const multiThreadPath = hasJspi
+      ? this.pathConfig['jspi/multi-thread/wllama.wasm']
+      : this.pathConfig['asyncify/multi-thread/wllama.wasm'];
+    const singleThreadPath = hasJspi
+      ? this.pathConfig['jspi/single-thread/wllama.wasm']
+      : this.pathConfig['asyncify/single-thread/wllama.wasm'];
+
     // detect if we can use multi-thread
     if (await isSupportMultiThread()) {
-      if (this.pathConfig['multi-thread/wllama.wasm']) {
+      if (multiThreadPath) {
         const hwConcurrency = Math.floor((navigator.hardwareConcurrency || 1) / 2);
         this.nbThreads = config.n_threads ?? hwConcurrency;
         if (this.nbThreads > 1) {
@@ -611,7 +622,7 @@ export class Wllama {
         }
       } else {
         this.logger().warn(
-          'Missing paths to "multi-thread/wllama.wasm", falling back to single-thread'
+          'Missing paths to multi-thread build, falling back to single-thread'
         );
       }
     } else {
@@ -631,14 +642,10 @@ export class Wllama {
 
     const mPathConfig = this.useMultiThread
       ? {
-          'wllama.wasm': absoluteUrl(
-            this.pathConfig['multi-thread/wllama.wasm']!!
-          ),
+          'wllama.wasm': absoluteUrl(multiThreadPath!),
         }
       : {
-          'wllama.wasm': absoluteUrl(
-            this.pathConfig['single-thread/wllama.wasm']
-          ),
+          'wllama.wasm': absoluteUrl(singleThreadPath!),
         };
     this.proxy = new ProxyToWorker(
       mPathConfig,

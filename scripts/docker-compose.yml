@@ -19,33 +19,43 @@ services:
         set -e
         cd /source
 
-        export SHARED_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -fwasm-exceptions -sEXPORT_ALL=1 -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8 -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
+        DAWN_TAG=v20251027.212519
+        EMDAWN_PKG="emdawnwebgpu_pkg-$${DAWN_TAG}.zip"
+        EMDAWNWEBGPU_DIR="/source/emdawnwebgpu_pkg"
+        echo "Downloading $${EMDAWN_PKG}"
+        curl -L -o emdawn.zip \
+          "https://github.com/google/dawn/releases/download/$${DAWN_TAG}/$${EMDAWN_PKG}"
+        python3 -c "import zipfile; zf=zipfile.ZipFile('emdawn.zip','r'); zf.extractall('/source'); zf.close()"
 
-        mkdir -p wasm/single-thread
-        cd wasm/single-thread
-        emcmake cmake ../..
-        export EMCC_CFLAGS="$$SHARED_EMCC_FLAGS"
-        emmake make wllama -j
+        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument"
 
-        cd ../..
+        build_target() {
+          local build_name="$1"
+          local build_dir="$2"
+          local cmake_flag="$3"
+          local extra_flags="$4"
+          local emcc_flags="$${COMMON_EMCC_FLAGS} $${extra_flags}"
+          local output_dir="src/$${build_dir#wasm/}"
 
-        mkdir -p wasm/multi-thread
-        cd wasm/multi-thread
-        export EMCC_CFLAGS="" # temporary clear it
-        emcmake cmake ../..
-        export EMCC_CFLAGS="$$SHARED_EMCC_FLAGS -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
-        emmake make wllama -j
+          echo "Building $${build_name}"
+          mkdir -p "$${build_dir}"
+          cd "$${build_dir}"
+          export EMCC_CFLAGS=""
+          emcmake cmake ../.. "$${cmake_flag}" -DEMDAWNWEBGPU_DIR="$${EMDAWNWEBGPU_DIR}"
+          export EMCC_CFLAGS="$${emcc_flags}"
+          emmake make wllama -j
+          cd /source
 
-        # go back to root
-        cd ../..
+          echo "$${build_dir}"; ls -lh "$${build_dir}"
+          mkdir -p "$${output_dir}"
+          cp "$${build_dir}/wllama.js" "$${output_dir}"
+          cp "$${build_dir}/wllama.wasm" "$${output_dir}"
+        }
 
-        # list files
-        echo "wasm/single-thread"; ls -lh wasm/single-thread
-        echo "wasm/multi-thread";  ls -lh wasm/multi-thread
+        build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
 
-        # copy output files
-        mkdir -p src/multi-thread
-        cp wasm/multi-thread/wllama.js         src/multi-thread
-        cp wasm/multi-thread/wllama.wasm       src/multi-thread
-        cp wasm/single-thread/wllama.js        src/single-thread
-        cp wasm/single-thread/wllama.wasm      src/single-thread
+        build_target "JSPI multi-thread" "wasm/jspi-multi-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
+
+        build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1"
+
+        build_target "ASYNCIFY multi-thread" "wasm/asyncify-multi-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
