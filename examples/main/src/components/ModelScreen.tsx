@@ -28,7 +28,9 @@ export default function ModelScreen() {
 
   const blockModelBtn = !!(loadedModel || isDownloading || isLoadingModel);
 
-  const onChange = (key: keyof typeof currParams) => (e: any) => {
+  const onChange = (
+    key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature'
+  ) => (e: any) => {
     setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
   };
 
@@ -86,6 +88,19 @@ export default function ModelScreen() {
             onChange={onChange('temperature')}
             value={currParams.temperature}
           />
+        </label>
+
+        <label className="label cursor-pointer justify-start gap-3 mb-2">
+          <input
+            type="checkbox"
+            className="toggle toggle-primary"
+            checked={currParams.preferWebGPU}
+            onChange={(e) =>
+              setParams({ ...currParams, preferWebGPU: e.target.checked })
+            }
+            disabled={blockModelBtn}
+          />
+          <span className="label-text">Prefer WebGPU</span>
         </label>
 
         <button

@@ -25,6 +25,7 @@ export interface InferenceParams {
   nBatch: number;
   temperature: number;
   nPredict: number;
+  preferWebGPU: boolean;
 }
 
 export interface Message {

@@ -20,14 +20,14 @@ export default function GuideScreen() {
             llama.cpp
           </a>
           . It enables running LLM inference directly on browser by leveraging
-          the power of <b>WebAssembly</b>. It accepts GGUF as model format.
+          the power of <b>WebAssembly</b> and <b>WebGPU</b>. It accepts GGUF as model format.
         </div>
 
         <div className="mb-3">
           Please note that:
           <ul>
             <li>
-              Due to WebAssembly overhead, performance will not be as good as
+              Due to WebAssembly and WebGPU overhead, performance will not be as good as
               running llama.cpp in native. Performance degradation can range
               from 25% to 50%.
             </li>
@@ -48,8 +48,7 @@ export default function GuideScreen() {
             </li>
             <li>Running on smartphone maybe buggy.</li>
             <li>
-              <b>WebGPU is not supported</b>. We're still working hard to add
-              support for WebGPU.
+              <b>WebGPU support is experimental</b>. We're still working hard to stabilize and optimize the WebGPU backend, and it may not work well on some devices.
             </li>
           </ul>
         </div>
