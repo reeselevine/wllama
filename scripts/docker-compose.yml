@@ -27,7 +27,7 @@ services:
           "https://github.com/google/dawn/releases/download/$${DAWN_TAG}/$${EMDAWN_PKG}"
         python3 -c "import zipfile; zf=zipfile.ZipFile('emdawn.zip','r'); zf.extractall('/source'); zf.close()"
 
-        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument -sIMPORTED_MEMORY"
+        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument -sIMPORTED_MEMORY"
 
         build_target() {
           local build_name="$1"
@@ -52,10 +52,10 @@ services:
           cp "$${build_dir}/wllama.wasm" "$${output_dir}"
         }
 
-        build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
+        # build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
 
-        build_target "JSPI multi-thread" "wasm/jspi-multi-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
+        # build_target "JSPI multi-thread" "wasm/jspi-multi-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
 
-        build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1"
+        build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -sASSERTIONS=2 -sSTACK_OVERFLOW_CHECK=2"
 
-        build_target "ASYNCIFY multi-thread" "wasm/asyncify-multi-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
+        # build_target "ASYNCIFY multi-thread" "wasm/asyncify-multi-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"

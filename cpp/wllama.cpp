@@ -160,6 +160,7 @@ extern "C" const char *wllama_exit()
 
 extern "C" const char *wllama_debug()
 {
+  static std::string result;
   auto get_mem_total = [&]()
   {
 #ifdef __EMSCRIPTEN__
@@ -179,14 +180,41 @@ extern "C" const char *wllama_debug()
     return 0;
 #endif
   };
-  /*json res = json{
-      {"mem_total_MB", get_mem_total() / 1024 / 1024},
-      {"mem_free_MB", get_mem_free() / 1024 / 1024},
-      {"mem_used_MB", (get_mem_total() - get_mem_free()) / 1024 / 1024},
-  };
-  result = std::string(res.dump());
-  return result.c_str();*/
-  return nullptr;
+
+  const unsigned int mem_total = get_mem_total();
+  const unsigned int mem_free = get_mem_free();
+  const unsigned int mem_used = mem_total >= mem_free ? (mem_total - mem_free) : 0;
+
+  std::ostringstream out;
+  out << "{";
+  out << "\"mem_total_bytes\":" << mem_total << ",";
+  out << "\"mem_free_bytes\":" << mem_free << ",";
+  out << "\"mem_used_bytes\":" << mem_used << ",";
+  out << "\"mem_total_mb\":" << (mem_total / 1024 / 1024) << ",";
+  out << "\"mem_free_mb\":" << (mem_free / 1024 / 1024) << ",";
+  out << "\"mem_used_mb\":" << (mem_used / 1024 / 1024) << ",";
+  out << "\"tokens_cached\":" << app.tokens.size() << ",";
+  out << "\"has_model\":" << (app.model != nullptr ? "true" : "false") << ",";
+  out << "\"has_context\":" << (app.ctx != nullptr ? "true" : "false") << ",";
+  out << "\"has_sampler\":" << (app.ctx_sampling != nullptr ? "true" : "false");
+
+  if (app.ctx != nullptr)
+  {
+    out << ",\"n_ctx\":" << llama_n_ctx(app.ctx);
+    out << ",\"n_batch\":" << llama_n_batch(app.ctx);
+    out << ",\"n_ubatch\":" << llama_n_ubatch(app.ctx);
+  }
+
+  if (app.model != nullptr)
+  {
+    out << ",\"n_layer\":" << llama_model_n_layer(app.model);
+    out << ",\"n_embd\":" << llama_model_n_embd(app.model);
+    out << ",\"n_ctx_train\":" << llama_model_n_ctx_train(app.model);
+  }
+
+  out << "}";
+  result = out.str();
+  return result.c_str();
 }
 
 int main()
