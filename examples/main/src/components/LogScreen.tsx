@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { DebugLogger } from '../utils/utils';
 import ScreenWrapper from './ScreenWrapper';
 import { nl2br } from '../utils/nl2br';
 
 export default function LogScreen() {
+  const [, setVersion] = useState(0);
+
+  useEffect(() => {
+    return DebugLogger.subscribe(() => {
+      setVersion((v) => v + 1);
+    });
+  }, []);
+
   return (
     <ScreenWrapper>
       <div className="debug-log-screen pt-8">

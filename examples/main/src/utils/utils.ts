@@ -87,21 +87,37 @@ export const toHumanReadableSize = (bytes: number): string => {
 
 export const DebugLogger = {
   content: [] as string[],
+  listeners: new Set<() => void>(),
   debug(...args: any) {
     console.debug('🔧', ...args);
     DebugLogger.content.push(`🔧 ${DebugLogger.argsToStr(args)}`);
+    DebugLogger.emit();
   },
   log(...args: any) {
     console.log('ℹ️', ...args);
     DebugLogger.content.push(`ℹ️ ${DebugLogger.argsToStr(args)}`);
+    DebugLogger.emit();
   },
   warn(...args: any) {
     console.warn('⚠️', ...args);
     DebugLogger.content.push(`⚠️ ${DebugLogger.argsToStr(args)}`);
+    DebugLogger.emit();
   },
   error(...args: any) {
     console.error('☠️', ...args);
     DebugLogger.content.push(`☠️ ${DebugLogger.argsToStr(args)}`);
+    DebugLogger.emit();
+  },
+  subscribe(listener: () => void) {
+    DebugLogger.listeners.add(listener);
+    return () => {
+      DebugLogger.listeners.delete(listener);
+    };
+  },
+  emit() {
+    for (const listener of DebugLogger.listeners) {
+      listener();
+    }
   },
   argsToStr(args: any[]): string {
     return args
