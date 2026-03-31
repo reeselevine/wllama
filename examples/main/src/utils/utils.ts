@@ -86,27 +86,31 @@ export const toHumanReadableSize = (bytes: number): string => {
 };
 
 export const DebugLogger = {
+  maxEntries: 400,
   content: [] as string[],
   listeners: new Set<() => void>(),
+  push(line: string) {
+    DebugLogger.content.push(line);
+    if (DebugLogger.content.length > DebugLogger.maxEntries) {
+      DebugLogger.content.splice(0, DebugLogger.content.length - DebugLogger.maxEntries);
+    }
+    DebugLogger.emit();
+  },
   debug(...args: any) {
     console.debug('🔧', ...args);
-    DebugLogger.content.push(`🔧 ${DebugLogger.argsToStr(args)}`);
-    DebugLogger.emit();
+    DebugLogger.push(`🔧 ${DebugLogger.argsToStr(args)}`);
   },
   log(...args: any) {
     console.log('ℹ️', ...args);
-    DebugLogger.content.push(`ℹ️ ${DebugLogger.argsToStr(args)}`);
-    DebugLogger.emit();
+    DebugLogger.push(`ℹ️ ${DebugLogger.argsToStr(args)}`);
   },
   warn(...args: any) {
     console.warn('⚠️', ...args);
-    DebugLogger.content.push(`⚠️ ${DebugLogger.argsToStr(args)}`);
-    DebugLogger.emit();
+    DebugLogger.push(`⚠️ ${DebugLogger.argsToStr(args)}`);
   },
   error(...args: any) {
     console.error('☠️', ...args);
-    DebugLogger.content.push(`☠️ ${DebugLogger.argsToStr(args)}`);
-    DebugLogger.emit();
+    DebugLogger.push(`☠️ ${DebugLogger.argsToStr(args)}`);
   },
   subscribe(listener: () => void) {
     DebugLogger.listeners.add(listener);
