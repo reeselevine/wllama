@@ -480,6 +480,17 @@ glue_msg_decode_res action_decode(app_t &app, const char *req_raw)
   llama_tokens tokens_list = std::move(req.tokens.arr);
   bool skip_logits = req.skip_logits.value;
   size_t i = 0;
+  const size_t n_tokens_in = tokens_list.size();
+  const int32_t first_token = n_tokens_in > 0 ? tokens_list.front() : -1;
+  const int32_t last_token = n_tokens_in > 0 ? tokens_list.back() : -1;
+  fprintf(stderr,
+          "@@DEBUG@@action_decode:start n_tokens=%zu skip_logits=%d n_past_before=%zu first_token=%d last_token=%d\n",
+          n_tokens_in,
+          skip_logits ? 1 : 0,
+          app.tokens.size(),
+          first_token,
+          last_token);
+  fflush(stderr);
   wcommon_batch_clear(app.batch);
   for (auto id : tokens_list)
   {
@@ -494,11 +505,21 @@ glue_msg_decode_res action_decode(app_t &app, const char *req_raw)
   {
     app.batch.logits[app.batch.n_tokens - 1] = true;
   }
+  fprintf(stderr,
+          "@@DEBUG@@action_decode:prepared batch_n_tokens=%d n_past_after_append=%zu\n",
+          app.batch.n_tokens,
+          app.tokens.size());
+  fflush(stderr);
   glue_msg_decode_res res;
-  if (llama_decode(app.ctx, app.batch) != 0)
+  fprintf(stderr, "@@DEBUG@@action_decode:llama_decode:enter\n");
+  fflush(stderr);
+  const int decode_status = llama_decode(app.ctx, app.batch);
+  fprintf(stderr, "@@DEBUG@@action_decode:llama_decode:return status=%d\n", decode_status);
+  fflush(stderr);
+  if (decode_status != 0)
   {
     res.success.value = false;
-    res.message.value = "llama_decode failed, maybe n_batch is too small?";
+    res.message.value = "llama_decode failed with status = " + std::to_string(decode_status);
     res.n_past.value = app.tokens.size();
   }
   else
@@ -506,6 +527,11 @@ glue_msg_decode_res action_decode(app_t &app, const char *req_raw)
     res.success.value = true;
     res.n_past.value = app.tokens.size();
   }
+  fprintf(stderr,
+          "@@DEBUG@@action_decode:end success=%d n_past=%zu\n",
+          res.success.value ? 1 : 0,
+          app.tokens.size());
+  fflush(stderr);
   return res;
 }
 
