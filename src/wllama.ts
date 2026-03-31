@@ -879,6 +879,7 @@ export class Wllama {
       // decode next token
       await this.samplingAccept([sampled.token]);
       await this.decode([sampled.token], {});
+      await Promise.resolve();
     }
     return bufToText(outBuf);
   }

@@ -204,7 +204,7 @@ export const WllamaProvider = ({ children }: any) => {
     stopSignal = false;
     const result = await wllamaInstance.createCompletion(input, {
       nPredict: currParams.nPredict,
-      useCache: false,
+      useCache: true,
       sampling: {
         temp: currParams.temperature,
       },
