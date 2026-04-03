@@ -58,16 +58,15 @@ interface WllamaContextValue {
 const WllamaContext = createContext<WllamaContextValue>({} as any);
 
 const modelManager = new ModelManager();
-let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, {
-  logger: DebugLogger,
-  preferWebGPU: true,
-});
-let stopSignal = false;
-const resetWllamaInstance = () => {
-  wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, {
+const newWllamaInstance = (preferWebGPU: boolean) =>
+  new Wllama(WLLAMA_CONFIG_PATHS, {
     logger: DebugLogger,
-    preferWebGPU: true,
+    preferWebGPU,
   });
+let wllamaInstance = newWllamaInstance(DEFAULT_INFERENCE_PARAMS.preferWebGPU);
+let stopSignal = false;
+const resetWllamaInstance = (preferWebGPU: boolean) => {
+  wllamaInstance = newWllamaInstance(preferWebGPU);
 };
 
 export const WllamaProvider = ({ children }: any) => {
@@ -78,7 +77,10 @@ export const WllamaProvider = ({ children }: any) => {
   const [isBusy, setBusy] = useState(false);
   const [currRuntimeInfo, setCurrRuntimeInfo] = useState<RuntimeInfo>();
   const [currParams, setCurrParams] = useState<InferenceParams>(
-    WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS)
+    {
+      ...DEFAULT_INFERENCE_PARAMS,
+      ...WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS),
+    }
   );
   const [downloadingProgress, setDownloadingProgress] = useState<
     Record<DisplayedModel['url'], number>
@@ -179,7 +181,7 @@ export const WllamaProvider = ({ children }: any) => {
         hasChatTemplate: !!wllamaInstance.getChatTemplate(),
       });
     } catch (e) {
-      resetWllamaInstance();
+      resetWllamaInstance(currParams.preferWebGPU);
       alert(`Failed to load model: ${(e as any).message ?? 'Unknown error'}`);
       setLoadedModel(undefined);
     }
@@ -188,7 +190,7 @@ export const WllamaProvider = ({ children }: any) => {
   const unloadModel = async () => {
     if (!loadedModel) return;
     await wllamaInstance.exit();
-    resetWllamaInstance();
+    resetWllamaInstance(currParams.preferWebGPU);
     setLoadedModel(undefined);
     setCurrRuntimeInfo(undefined);
   };
@@ -231,8 +233,13 @@ export const WllamaProvider = ({ children }: any) => {
 
   // proxy function for saving to localStorage
   const setParams = (val: InferenceParams) => {
-    WllamaStorage.save('params', val);
-    setCurrParams(val);
+    const next = { ...DEFAULT_INFERENCE_PARAMS, ...val };
+    const gpuPreferenceChanged = currParams.preferWebGPU !== next.preferWebGPU;
+    if (gpuPreferenceChanged && !loadedModel) {
+      resetWllamaInstance(next.preferWebGPU);
+    }
+    WllamaStorage.save('params', next);
+    setCurrParams(next);
   };
 
   // function for managing custom user model

@@ -2,8 +2,10 @@ import { test, expect } from 'vitest';
 import { Wllama, WllamaChatMessage } from './wllama';
 
 const CONFIG_PATHS = {
-  'single-thread/wllama.wasm': '/src/single-thread/wllama.wasm',
-  'multi-thread/wllama.wasm': '/src/multi-thread/wllama.wasm',
+  'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
+  'jspi/multi-thread/wllama.wasm': '/src/jspi-multi-thread/wllama.wasm',
+  'asyncify/single-thread/wllama.wasm':
+    '/src/asyncify-single-thread/wllama.wasm',
 };
 
 const TINY_MODEL =

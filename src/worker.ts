@@ -14,11 +14,7 @@
 import { glueDeserialize, glueSerialize } from './glue/glue';
 import type { GlueMsg } from './glue/messages';
 import { createWorker, isSafariMobile } from './utils';
-import {
-  LLAMA_CPP_WORKER_CODE,
-  WLLAMA_MULTI_THREAD_CODE,
-  WLLAMA_SINGLE_THREAD_CODE,
-} from './workers-code/generated';
+import * as workersCode from './workers-code/generated';
 
 interface Logger {
   debug: typeof console.debug;
@@ -74,11 +70,39 @@ export class ProxyToWorker {
 
   async moduleInit(ggufFiles: { name: string; blob: Blob }[]): Promise<void> {
     if (!this.pathConfig['wllama.wasm']) {
-      throw new Error('"single-thread/wllama.wasm" is missing from pathConfig');
+      throw new Error('"wllama.wasm" is missing from pathConfig');
     }
-    let moduleCode = this.multiThread
-      ? WLLAMA_MULTI_THREAD_CODE
-      : WLLAMA_SINGLE_THREAD_CODE;
+    const buildType = this.pathConfig['wllama.buildType'];
+    const isJspi = buildType === 'jspi';
+    const isAsyncify = buildType === 'asyncify';
+    if (!isJspi && !isAsyncify) {
+      throw new Error(
+        '"wllama.buildType" must be either "jspi" or "asyncify"'
+      );
+    }
+
+    let moduleCode: string;
+    if (this.multiThread) {
+      if (isJspi) {
+        moduleCode = workersCode.WLLAMA_JSPI_MULTI_THREAD_CODE;
+      } else if (isAsyncify) {
+        moduleCode = workersCode.WLLAMA_ASYNCIFY_MULTI_THREAD_CODE;
+      } else {
+        throw new Error(
+          'Unknown multi-thread build type for provided wllama.wasm path'
+        );
+      }
+    } else {
+      if (isJspi) {
+        moduleCode = workersCode.WLLAMA_JSPI_SINGLE_THREAD_CODE;
+      } else if (isAsyncify) {
+        moduleCode = workersCode.WLLAMA_ASYNCIFY_SINGLE_THREAD_CODE;
+      } else {
+        throw new Error(
+          'Unknown single-thread build type for provided wllama.wasm path'
+        );
+      }
+    }
     let mainModuleCode = moduleCode.replace('var Module', 'var ___Module');
     const runOptions = {
       pathConfig: this.pathConfig,
@@ -87,7 +111,7 @@ export class ProxyToWorker {
     const completeCode: string = [
       `const RUN_OPTIONS = ${JSON.stringify(runOptions)};`,
       `function wModuleInit() { ${mainModuleCode}; return Module; }`,
-      LLAMA_CPP_WORKER_CODE,
+      workersCode.LLAMA_CPP_WORKER_CODE,
     ].join(';\n\n');
     this.worker = createWorker(completeCode);
     this.worker.onmessage = this.onRecvMsg.bind(this);

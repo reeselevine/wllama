@@ -57,6 +57,11 @@ interface UserAddedModel {
   size: number;
 }
 
+export function isIQuantModel(nameOrUrl: string): boolean {
+  const normalized = nameOrUrl.replace(/\?.*/, '').split('/').pop() ?? nameOrUrl;
+  return normalized.toUpperCase().includes('IQ');
+}
+
 export function getUserAddedModels(cachedModels: Model[]): DisplayedModel[] {
   const userAddedModels: UserAddedModel[] = WllamaStorage.load(
     'custom_models',
