@@ -4,6 +4,8 @@ import { Message, Screen } from './types';
 import { Wllama } from '@wllama/wllama';
 import { DEFAULT_CHAT_TEMPLATE } from '../config';
 
+const IOS_WEBGPU_MEMORY_LIMIT = 384 * 1024 * 1024;
+
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,9 +87,27 @@ export const toHumanReadableSize = (bytes: number): string => {
   return `${size.toFixed(1)} ${units[unitIndex]}`;
 };
 
+export const isIOSBrowser = (): boolean => {
+  const ua = navigator.userAgent;
+  return ua.includes('iPhone') || ua.includes('iPad');
+};
+
 export const getWebGPUMemoryBudget = async (): Promise<number | undefined> => {
+  if (!navigator.gpu) {
+    return undefined;
+  }
+
   const adapter = await navigator.gpu.requestAdapter();
-  return adapter?.limits.maxBufferSize;
+  const maxBufferSize = adapter?.limits.maxBufferSize;
+  if (!maxBufferSize) {
+    return undefined;
+  }
+
+  if (isIOSBrowser()) {
+    return Math.min(maxBufferSize, IOS_WEBGPU_MEMORY_LIMIT);
+  }
+
+  return maxBufferSize;
 };
 
 export const DebugLogger = {
