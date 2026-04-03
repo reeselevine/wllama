@@ -61,4 +61,11 @@ For Three.js 3D — load via CDN in html field:
   function animate() { requestAnimationFrame(animate); /* update here */ renderer.render(scene, camera); }
   animate();
 
-CRITICAL: Always call renderer.render() inside a requestAnimationFrame loop or nothing will appear.`;
+CRITICAL: Always call renderer.render() inside a requestAnimationFrame loop or nothing will appear.
+CRITICAL: Always add actual visible objects/geometry/particles to the scene. An empty scene is just a black square.
+CRITICAL: For a starfield, you MUST create star geometry and add it to the scene, e.g.:
+  const geo = new THREE.BufferGeometry();
+  const verts = [];
+  for(let i=0;i<2000;i++) verts.push((Math.random()-0.5)*200,(Math.random()-0.5)*200,(Math.random()-0.5)*200);
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts,3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({color:0xffffff,size:0.2})));`;

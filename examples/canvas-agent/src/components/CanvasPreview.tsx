@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CodeState } from '../App';
 
 interface Props {
@@ -25,7 +26,9 @@ ${code.js}
 }
 
 export default function CanvasPreview({ code }: Props) {
+  const [refreshKey, setRefreshKey] = useState(0);
   const isEmpty = !code.html && !code.css && !code.js;
+  const srcDoc = buildSrcDoc(code);
 
   return (
     <div className="flex-1 overflow-hidden relative bg-black min-h-0">
@@ -34,12 +37,21 @@ export default function CanvasPreview({ code }: Props) {
           preview will appear here
         </div>
       ) : (
-        <iframe
-          key={code.html + code.css + code.js}
-          className="w-full h-full border-0"
-          srcDoc={buildSrcDoc(code)}
-          title="preview"
-        />
+        <>
+          <iframe
+            key={srcDoc + refreshKey}
+            className="w-full h-full border-0"
+            srcDoc={srcDoc}
+            title="preview"
+          />
+          <button
+            className="absolute top-2 right-2 btn btn-xs btn-ghost opacity-40 hover:opacity-100"
+            onClick={() => setRefreshKey((k) => k + 1)}
+            title="Reload preview"
+          >
+            ↺
+          </button>
+        </>
       )}
     </div>
   );
