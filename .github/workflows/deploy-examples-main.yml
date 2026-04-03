@@ -21,7 +21,7 @@ jobs:
           node-version: "20"
 
       - name: Build root wllama package
-        run: npm ci && npm run build
+        run: npm install && npm run build
 
       - name: Build wllama chat example
         run: npm ci && npm run build
