@@ -85,6 +85,18 @@ export const toHumanReadableSize = (bytes: number): string => {
   return `${size.toFixed(1)} ${units[unitIndex]}`;
 };
 
+export const getWebGPUMemoryBudget = async (): Promise<number | undefined> => {
+  if (typeof navigator === 'undefined' || !('gpu' in navigator)) {
+    return undefined;
+  }
+
+  const adapter = await (navigator as Navigator & {
+    gpu?: { requestAdapter(): Promise<{ limits?: { maxBufferSize?: number } } | null> };
+  }).gpu?.requestAdapter();
+
+  return adapter?.limits?.maxBufferSize;
+};
+
 export const DebugLogger = {
   content: [] as string[],
   debug(...args: any) {
