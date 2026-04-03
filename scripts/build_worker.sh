@@ -32,8 +32,10 @@ process_file ./src/workers-code/llama-cpp.js  LLAMA_CPP_WORKER_CODE
 process_file ./src/workers-code/opfs-utils.js OPFS_UTILS_WORKER_CODE
 
 # emscripten
-process_file ./src/multi-thread/wllama.js         WLLAMA_MULTI_THREAD_CODE
-process_file ./src/single-thread/wllama.js        WLLAMA_SINGLE_THREAD_CODE
+process_file ./src/jspi-multi-thread/wllama.js         WLLAMA_JSPI_MULTI_THREAD_CODE
+process_file ./src/jspi-single-thread/wllama.js        WLLAMA_JSPI_SINGLE_THREAD_CODE
+process_file ./src/asyncify-single-thread/wllama.js    WLLAMA_ASYNCIFY_SINGLE_THREAD_CODE
+process_file ./src/asyncify-multi-thread/wllama.js     WLLAMA_ASYNCIFY_MULTI_THREAD_CODE
 
 # build CDN paths
 node ./scripts/generate_wasm_from_cdn.js

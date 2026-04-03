@@ -295,7 +295,7 @@ onmessage = async (e) => {
     const argSize = args[1];
     try {
       // create blank file
-      const emptyBuffer = new ArrayBuffer(0);
+      const emptyBuffer = new Uint8Array(0);
       Module['FS_createDataFile'](
         '/models',
         argFilename,
