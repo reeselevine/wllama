@@ -6,7 +6,7 @@ import ChatPanel from './components/ChatPanel';
 import CanvasPreview from './components/CanvasPreview';
 import CodeTabs from './components/CodeTabs';
 
-export type CodeState = { html: string; css: string; js: string };
+export type CodeState = { html: string; css: string };
 
 export type ChatMessage =
   | { role: 'user'; content: string }
@@ -39,7 +39,7 @@ export default function App() {
   const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [loadedModelLabel, setLoadedModelLabel] = useState('');
 
-  const [code, setCode] = useState<CodeState>({ html: '', css: '', js: '' });
+  const [code, setCode] = useState<CodeState>({ html: '', css: '' });
   const [displayMessages, setDisplayMessages] = useState<ChatMessage[]>([]);
   const llmMessages = useRef<WllamaChatMessage[]>([
     { role: 'system', content: SYSTEM_PROMPT },

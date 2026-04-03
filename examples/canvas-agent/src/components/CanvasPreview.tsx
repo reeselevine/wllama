@@ -18,16 +18,13 @@ ${code.css}
 </head>
 <body>
 ${code.html}
-<script>
-${code.js}
-</script>
 </body>
 </html>`;
 }
 
 export default function CanvasPreview({ code }: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const isEmpty = !code.html && !code.css && !code.js;
+  const isEmpty = !code.html && !code.css;
   const srcDoc = buildSrcDoc(code);
 
   return (

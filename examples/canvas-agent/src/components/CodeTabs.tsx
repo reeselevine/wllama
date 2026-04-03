@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { CodeState } from '../App';
 
-type Tab = 'html' | 'css' | 'js';
+type Tab = 'html' | 'css';
 
 interface Props {
   code: CodeState;
@@ -10,12 +10,11 @@ interface Props {
 export default function CodeTabs({ code }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('html');
 
-  const tabs: Tab[] = ['html', 'css', 'js'];
+  const tabs: Tab[] = ['html', 'css'];
   const content = code[activeTab];
 
   return (
     <div className="flex flex-col border-t border-base-300 h-[38%] min-h-0">
-      {/* Tab bar */}
       <div className="flex shrink-0 border-b border-base-300">
         {tabs.map((tab) => (
           <button
@@ -31,8 +30,6 @@ export default function CodeTabs({ code }: Props) {
           </button>
         ))}
       </div>
-
-      {/* Code display */}
       <div className="flex-1 overflow-auto bg-base-200">
         <pre className="p-3 text-xs font-mono text-base-content/80 leading-relaxed">
           {content || (
