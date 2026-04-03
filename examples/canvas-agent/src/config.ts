@@ -28,19 +28,24 @@ export const MODELS = [
     size: 807690656,
   },
   {
-    label: 'Llama 3.2 3B — (~2.0GB)',
+    label: 'Gemma 3 1B — (~1.0GB)',
+    url: 'https://huggingface.co/bartowski/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q8_0.gguf',
+    size: 1149239296,
+  },
+  {
+    label: 'SmolLM2 1.7B — (~1.1GB)',
+    url: 'https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf',
+    size: 1181116006,
+  },
+  {
+    label: 'Qwen2.5 1.5B — (~1.6GB)',
+    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q8_0.gguf',
+    size: 1771674624,
+  },
+  {
+    label: 'Llama 3.2 3B — (~1.9GB)',
     url: 'https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf',
     size: 2019377152,
-  },
-  {
-    label: 'Qwen3 4B — (~2.6GB)',
-    url: 'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf',
-    size: 2578612224,
-  },
-  {
-    label: 'Qwen2.5 7B — (~4.7GB)',
-    url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
-    size: 4685144064,
   },
 ];
 
