@@ -34,6 +34,9 @@ export default function ModelScreen() {
   } = useWllama();
 
   const blockModelBtn = !!(loadedModel || isDownloading || isLoadingModel);
+  const effectiveWebGPUMemoryBudget = webgpuMemoryBudget
+    ? Math.floor(webgpuMemoryBudget * 0.8)
+    : undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -130,9 +133,9 @@ export default function ModelScreen() {
           <span className="label-text">Prefer WebGPU</span>
         </label>
 
-        {currParams.preferWebGPU && webgpuMemoryBudget && (
+        {currParams.preferWebGPU && effectiveWebGPUMemoryBudget && (
           <div className="text-sm opacity-80 mb-2">
-            WebGPU memory budget: {toHumanReadableSize(webgpuMemoryBudget)}
+            Usable WebGPU Budget: {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
           </div>
         )}
 
@@ -180,7 +183,7 @@ export default function ModelScreen() {
               model={m}
               blockModelBtn={blockModelBtn}
               preferWebGPU={currParams.preferWebGPU}
-              webgpuMemoryBudget={webgpuMemoryBudget}
+              webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
       </div>
@@ -196,7 +199,7 @@ export default function ModelScreen() {
               model={m}
               blockModelBtn={blockModelBtn}
               preferWebGPU={currParams.preferWebGPU}
-              webgpuMemoryBudget={webgpuMemoryBudget}
+              webgpuMemoryBudget={effectiveWebGPUMemoryBudget}
             />
           ))}
       </div>
