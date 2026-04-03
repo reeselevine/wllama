@@ -13,7 +13,7 @@ export type ChatMessage =
   | { role: 'assistant'; status: 'loading' | 'done' | 'error'; raw?: string };
 
 const modelManager = new ModelManager();
-const wllama = new Wllama(WLLAMA_CONFIG_PATHS);
+const wllama = new Wllama(WLLAMA_CONFIG_PATHS, { preferWebGPU: true });
 
 function extractStringValue(text: string, key: string): string {
   const keyIdx = text.indexOf(`"${key}"`);
@@ -83,6 +83,7 @@ export default function App() {
   const [isLoadingModel, setIsLoadingModel] = useState(false);
   const [selectedModelIdx, setSelectedModelIdx] = useState(0);
   const [loadedModelLabel, setLoadedModelLabel] = useState('');
+  const [runtimeInfo, setRuntimeInfo] = useState<{ webgpu: boolean; multithread: boolean } | null>(null);
 
   const [code, setCode] = useState<CodeState>({ html: '', css: '' });
   const [displayMessages, setDisplayMessages] = useState<ChatMessage[]>([]);
@@ -107,6 +108,7 @@ export default function App() {
       }
       await wllama.loadModel(cachedModel, { n_ctx: 4096 });
       setLoadedModelLabel(model.label.split('—')[0].trim());
+      setRuntimeInfo({ webgpu: wllama.usingWebGPU(), multithread: wllama.isMultithread() });
       setModelLoaded(true);
     } catch (e) {
       alert(`Failed to load model: ${(e as Error).message ?? 'unknown error'}`);
@@ -168,11 +170,13 @@ export default function App() {
         <span className="font-mono font-bold tracking-tight text-lg">
           🎨 canvas agent
         </span>
-        {modelLoaded && (
-          <span className="badge badge-success badge-sm gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-success-content inline-block" />
-            {loadedModelLabel}
-          </span>
+        {modelLoaded && runtimeInfo && (
+          <div className="flex items-center gap-2">
+            <span className="badge badge-success badge-sm">{loadedModelLabel}</span>
+            <span className={`badge badge-sm ${runtimeInfo.webgpu ? 'badge-warning' : 'badge-neutral'}`}>
+              {runtimeInfo.webgpu ? '⚡ WebGPU' : runtimeInfo.multithread ? '🧵 MT' : '🐢 WASM'}
+            </span>
+          </div>
         )}
       </header>
 
