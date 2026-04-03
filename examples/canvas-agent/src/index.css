@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+}

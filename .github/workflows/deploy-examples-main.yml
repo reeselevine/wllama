@@ -23,17 +23,24 @@ jobs:
       - name: Build root wllama package
         run: npm ci && npm run build
 
-      - name: Install example deps
-        run: npm ci
+      - name: Build wllama chat example
+        run: npm ci && npm run build
         working-directory: examples/main
 
-      - name: Build example app
-        run: npm run build
-        working-directory: examples/main
+      - name: Build canvas-agent example
+        run: npm ci && npm run build
+        working-directory: examples/canvas-agent
+
+      - name: Assemble dist
+        run: |
+          mkdir -p _site
+          cp -r examples/main/dist/. _site/
+          mkdir -p _site/canvas-agent
+          cp -r examples/canvas-agent/dist/. _site/canvas-agent/
 
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@9d877eea73427180ae43cf98e8914934fe157a1a
         with:
           branch: gh-pages
-          folder: examples/main/dist
+          folder: _site
           clean: true

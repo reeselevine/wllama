@@ -1,0 +1,1 @@
+Redirecting to /coi-serviceworker@0.1.7/coi-serviceworker.min.js
