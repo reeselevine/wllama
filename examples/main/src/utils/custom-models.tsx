@@ -1,11 +1,15 @@
 import { MAX_GGUF_SIZE } from '../config';
-import { DisplayedModel } from './displayed-model';
+import { DisplayedModel, isIQuantModel } from './displayed-model';
 import { WllamaStorage } from './utils';
 
 const ggufMagicNumber = new Uint8Array([0x47, 0x47, 0x55, 0x46]);
 
 export async function verifyCustomModel(url: string): Promise<DisplayedModel> {
   const _url = url.replace(/\?.*/, '');
+
+  if (isIQuantModel(_url)) {
+    throw new Error('i-quant GGUFs are not supported in this example yet');
+  }
 
   const response = await fetch(_url, {
     headers: {

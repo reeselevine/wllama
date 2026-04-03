@@ -15,7 +15,7 @@ import {
 } from '../utils/utils';
 import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
-import { DisplayedModel } from '../utils/displayed-model';
+import { DisplayedModel, isIQuantModel } from '../utils/displayed-model';
 import { isValidGgufFile } from '@wllama/wllama';
 
 export default function ModelScreen() {
@@ -238,7 +238,7 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
           setHfFiles(
             data.siblings
               .map((s) => s.rfilename)
-              .filter((f) => isValidGgufFile(f))
+              .filter((f) => isValidGgufFile(f) && !isIQuantModel(f))
           );
           setErr('');
         } else {
