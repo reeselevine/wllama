@@ -18,6 +18,38 @@ import ScreenWrapper from './ScreenWrapper';
 import { DisplayedModel, isIQuantModel } from '../utils/displayed-model';
 import { isValidGgufFile } from '@wllama/wllama';
 
+const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
+
+function parseSplitFile(file: string) {
+  const match = file.match(SPLIT_GGUF_REGEX);
+  if (!match) {
+    return null;
+  }
+
+  return {
+    current: Number(match[2]),
+    total: Number(match[3]),
+  };
+}
+
+function getSelectableGgufFiles(files: string[]) {
+  return files
+    .filter((file) => {
+      const split = parseSplitFile(file);
+      return !split || split.current === 1;
+    })
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function getGgufOptionLabel(file: string) {
+  const split = parseSplitFile(file);
+  if (!split) {
+    return file;
+  }
+
+  return `${file} (${split.total} shards)`;
+}
+
 export default function ModelScreen() {
   const [showAddCustom, setShowAddCustom] = useState(false);
   const [webgpuMemoryBudget, setWebgpuMemoryBudget] = useState<
@@ -58,11 +90,10 @@ export default function ModelScreen() {
     };
   }, []);
 
-  const onChange = (
-    key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature'
-  ) => (e: any) => {
-    setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
-  };
+  const onChange =
+    (key: 'nThreads' | 'nContext' | 'nPredict' | 'temperature') => (e: any) => {
+      setParams({ ...currParams, [key]: parseFloat(e.target.value || -1) });
+    };
 
   return (
     <ScreenWrapper>
@@ -135,7 +166,8 @@ export default function ModelScreen() {
 
         {currParams.preferWebGPU && effectiveWebGPUMemoryBudget && (
           <div className="text-sm opacity-80 mb-2">
-            Usable WebGPU Budget: {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
+            Usable WebGPU Budget:{' '}
+            {toHumanReadableSize(effectiveWebGPUMemoryBudget)}
           </div>
         )}
 
@@ -236,9 +268,11 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
         const data: { siblings?: { rfilename: string }[] } = await res.json();
         if (data.siblings) {
           setHfFiles(
-            data.siblings
-              .map((s) => s.rfilename)
-              .filter((f) => isValidGgufFile(f) && !isIQuantModel(f))
+            getSelectableGgufFiles(
+              data.siblings
+                .map((s) => s.rfilename)
+                .filter((f) => isValidGgufFile(f) && !isIQuantModel(f))
+            )
           );
           setErr('');
         } else {
@@ -289,6 +323,11 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
           </a>{' '}
           to split it into smaller shards.
         </div>
+        <div className="mt-2 text-sm opacity-80">
+          For split models, select the first shard only, for example
+          <code> -00001-of-00003.gguf</code>. The remaining shards will be
+          loaded automatically.
+        </div>
         <div className="mt-4">
           <label className="input input-bordered flex items-center gap-2 mb-2">
             HF repo
@@ -306,16 +345,22 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
           </label>
           <select
             className="select select-bordered w-full"
+            value={hfFile}
             onChange={(e) => setHfFile(e.target.value)}
           >
             <option value="">Select a model file</option>
             {hfFiles.map((f) => (
               <option key={f} value={f}>
-                {f}
+                {getGgufOptionLabel(f)}
               </option>
             ))}
           </select>
         </div>
+        {hfFiles.length > 0 && (
+          <div className="text-sm opacity-80">
+            Showing single GGUF files and first shards only.
+          </div>
+        )}
         {err && <div className="mt-4 text-error">Error: {err}</div>}
         <div className="modal-action">
           <button

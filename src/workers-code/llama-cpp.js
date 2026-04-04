@@ -13,6 +13,7 @@ let Module = null;
 
 // send message back to main thread
 const msg = (data, transfer) => postMessage(data, transfer);
+const toUintPtr = (ptr) => ptr >>> 0;
 
 // Convert CPP log into JS log
 const cppLogToJSLog = (line) => {
@@ -194,7 +195,7 @@ const heapfsAlloc = (name, size) => {
     throw new Error('File size must be bigger than 0');
   }
   const m = Module;
-  const ptr = m.mmapAlloc(size);
+  const ptr = toUintPtr(m.mmapAlloc(size));
   const file = {
     ptr: ptr,
     size: size,
@@ -340,7 +341,9 @@ onmessage = async (e) => {
     const argAction = args[0];
     const argEncodedMsg = args[1];
     try {
-      const inputPtr = await wllamaMalloc(argEncodedMsg.byteLength, 0);
+      const inputPtr = toUintPtr(
+        await wllamaMalloc(argEncodedMsg.byteLength, 0)
+      );
       // copy data to wasm heap
       const inputBuffer = new Uint8Array(
         Module.HEAPU8.buffer,
@@ -348,7 +351,7 @@ onmessage = async (e) => {
         argEncodedMsg.byteLength
       );
       inputBuffer.set(argEncodedMsg, 0);
-      const outputPtr = await wllamaAction(argAction, inputPtr);
+      const outputPtr = toUintPtr(await wllamaAction(argAction, inputPtr));
       // length of output buffer is written at the first 4 bytes of input buffer
       const outputLen = new Uint32Array(Module.HEAPU8.buffer, inputPtr, 1)[0];
       // copy the output buffer to JS heap
