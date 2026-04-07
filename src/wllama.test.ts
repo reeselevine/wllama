@@ -45,6 +45,71 @@ test.sequential('loads single model file', async () => {
   await wllama.exit();
 });
 
+test.sequential('loads single model file with WebGPU', async () => {
+  if (!navigator.gpu) {
+    return;
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    return;
+  }
+
+  const wllama = createWllama({
+    preferWebGPU: true,
+  });
+
+  await wllama.loadModelFromUrl(TINY_MODEL, {
+    n_ctx: 1024,
+  });
+
+  expect(wllama.isModelLoaded()).toBe(true);
+  expect(wllama.usingWebGPU()).toBe(true);
+  expect(wllama.isMultithread()).toBe(false);
+
+  await wllama.exit();
+});
+
+test.sequential('generates completion with WebGPU', async () => {
+  if (!navigator.gpu) {
+    return;
+  }
+
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    return;
+  }
+
+  const wllama = createWllama({
+    preferWebGPU: true,
+  });
+
+  await wllama.loadModelFromUrl(TINY_MODEL, {
+    n_ctx: 1024,
+  });
+
+  const config = {
+    seed: 42,
+    temp: 0.0,
+    top_p: 0.95,
+    top_k: 40,
+  };
+
+  await wllama.samplingInit(config);
+
+  const completion = await wllama.createCompletion('Once upon a time', {
+    nPredict: 10,
+    sampling: config,
+  });
+
+  expect(wllama.usingWebGPU()).toBe(true);
+  expect(wllama.isMultithread()).toBe(false);
+  expect(completion).toBeDefined();
+  expect(completion.length).toBeGreaterThan(10);
+
+  await wllama.exit();
+});
+
 test.sequential('loads single model file from HF', async () => {
   const wllama = createWllama();
 
