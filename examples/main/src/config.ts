@@ -13,7 +13,6 @@ export const WLLAMA_CONFIG_PATHS = {
   'jspi/multi-thread/wllama.wasm': wllamaJspiMulti,
   'asyncify/single-thread/wllama.wasm': wllamaAsyncifySingle,
   'asyncify/multi-thread/wllama.wasm': wllamaAsyncifyMulti,
-
 };
 
 export const MAX_GGUF_SIZE = 2 * 1024 * 1024 * 1024; // 2GB

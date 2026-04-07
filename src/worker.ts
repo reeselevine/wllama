@@ -76,9 +76,7 @@ export class ProxyToWorker {
     const isJspi = buildType === 'jspi';
     const isAsyncify = buildType === 'asyncify';
     if (!isJspi && !isAsyncify) {
-      throw new Error(
-        '"wllama.buildType" must be either "jspi" or "asyncify"'
-      );
+      throw new Error('"wllama.buildType" must be either "jspi" or "asyncify"');
     }
 
     let moduleCode: string;
