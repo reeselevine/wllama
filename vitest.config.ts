@@ -4,7 +4,6 @@ const SAFARI = process.env.BROWSER === 'safari';
 
 export default defineConfig({
   test: {
-    testTimeout: 60000,
     exclude: [
       '**/node_modules/**',
       '**/esm/**',

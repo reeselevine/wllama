@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { LoggerWithoutDebug, Wllama, WllamaChatMessage } from './wllama';
+import { Wllama, WllamaChatMessage } from './wllama';
 
 const CONFIG_PATHS = {
   'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
@@ -17,16 +17,8 @@ const SPLIT_MODEL =
 
 const EMBD_MODEL = TINY_MODEL; // for better speed
 
-const TEST_WLLAMA_CONFIG = {
-  suppressNativeLog: true,
-  logger: LoggerWithoutDebug,
-};
-
-const createWllama = (config = {}) =>
-  new Wllama(CONFIG_PATHS, { ...TEST_WLLAMA_CONFIG, ...config });
-
 test.sequential('loads single model file', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -54,7 +46,7 @@ test.sequential('loads single model file with WebGPU', async () => {
     return;
   }
 
-  const wllama = createWllama({
+  const wllama = new Wllama(CONFIG_PATHS, {
     preferWebGPU: true,
   });
 
@@ -79,7 +71,7 @@ test.sequential('generates completion with WebGPU', async () => {
     return;
   }
 
-  const wllama = createWllama({
+  const wllama = new Wllama(CONFIG_PATHS, {
     preferWebGPU: true,
   });
 
@@ -110,7 +102,7 @@ test.sequential('generates completion with WebGPU', async () => {
 });
 
 test.sequential('loads single model file from HF', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromHF(
     'ggml-org/models',
@@ -126,7 +118,7 @@ test.sequential('loads single model file from HF', async () => {
 });
 
 test.sequential('loads single thread model', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -143,7 +135,7 @@ test.sequential('loads single thread model', async () => {
 });
 
 test.sequential('loads model with progress callback', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   let progressCalled = false;
   let lastLoaded = 0;
@@ -165,7 +157,7 @@ test.sequential('loads model with progress callback', async () => {
 });
 
 test.sequential('loads split model files', async () => {
-  const wllama = createWllama({
+  const wllama = new Wllama(CONFIG_PATHS, {
     parallelDownloads: 5,
   });
 
@@ -178,7 +170,7 @@ test.sequential('loads split model files', async () => {
 });
 
 test.sequential('tokenizes and detokenizes text', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -199,7 +191,7 @@ test.sequential('tokenizes and detokenizes text', async () => {
 });
 
 test.sequential('tokenize a long text', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -213,7 +205,7 @@ test.sequential('tokenize a long text', async () => {
 });
 
 test.sequential('generates completion', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -242,7 +234,7 @@ test.sequential('generates completion', async () => {
 });
 
 test.sequential('abort signal', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -280,7 +272,7 @@ test.sequential('abort signal', async () => {
 });
 
 test.sequential('gets logits', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -299,7 +291,7 @@ test.sequential('gets logits', async () => {
 });
 
 test.sequential('generates embeddings', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(EMBD_MODEL, {
     n_ctx: 1024,
@@ -337,7 +329,7 @@ test.sequential('generates embeddings', async () => {
 });
 
 test.sequential('allowOffline', async () => {
-  const wllama = createWllama({
+  const wllama = new Wllama(CONFIG_PATHS, {
     allowOffline: true,
   });
 
@@ -358,7 +350,7 @@ test.sequential('allowOffline', async () => {
 });
 
 test.sequential('formatChat', async () => {
-  const wllama = createWllama({
+  const wllama = new Wllama(CONFIG_PATHS, {
     allowOffline: true,
   });
 
@@ -390,7 +382,7 @@ test.sequential('formatChat', async () => {
 });
 
 test.sequential('generates chat completion', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -424,7 +416,7 @@ test.sequential('generates chat completion', async () => {
 });
 
 test.sequential('generates chat completion using async iterator', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -467,7 +459,7 @@ test.sequential('generates chat completion using async iterator', async () => {
 });
 
 test.sequential('cleans up resources', async () => {
-  const wllama = createWllama();
+  const wllama = new Wllama(CONFIG_PATHS);
   await wllama.loadModelFromUrl(TINY_MODEL);
   expect(wllama.isModelLoaded()).toBe(true);
   await wllama.exit();
