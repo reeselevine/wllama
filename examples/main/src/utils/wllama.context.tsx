@@ -6,10 +6,7 @@ import {
   WllamaStorage,
 } from './utils';
 import { Model, ModelManager, Wllama } from '@wllama/wllama';
-import {
-  DEFAULT_INFERENCE_PARAMS,
-  WLLAMA_CONFIG_PATHS,
-} from '../config';
+import { DEFAULT_INFERENCE_PARAMS, WLLAMA_CONFIG_PATHS } from '../config';
 import { InferenceParams, RuntimeInfo, ModelState, Screen } from './types';
 import { verifyCustomModel } from './custom-models';
 import {
@@ -76,12 +73,10 @@ export const WllamaProvider = ({ children }: any) => {
   const [cachedModels, setCachedModels] = useState<Model[]>([]);
   const [isBusy, setBusy] = useState(false);
   const [currRuntimeInfo, setCurrRuntimeInfo] = useState<RuntimeInfo>();
-  const [currParams, setCurrParams] = useState<InferenceParams>(
-    {
-      ...DEFAULT_INFERENCE_PARAMS,
-      ...WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS),
-    }
-  );
+  const [currParams, setCurrParams] = useState<InferenceParams>({
+    ...DEFAULT_INFERENCE_PARAMS,
+    ...WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS),
+  });
   const [downloadingProgress, setDownloadingProgress] = useState<
     Record<DisplayedModel['url'], number>
   >({});
