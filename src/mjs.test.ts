@@ -1,5 +1,8 @@
 import { test, expect } from 'vitest';
-import { Wllama as WllamaMJS } from '../esm/index.js';
+import {
+  LoggerWithoutDebug,
+  Wllama as WllamaMJS,
+} from '../esm/index.js';
 import { Wllama as WllamaMJSMinified } from '../esm/index.min.js';
 
 const CONFIG_PATHS = {
@@ -7,10 +10,17 @@ const CONFIG_PATHS = {
   'jspi/multi-thread/wllama.wasm': '/src/jspi-multi-thread/wllama.wasm',
   'asyncify/single-thread/wllama.wasm':
     '/src/asyncify-single-thread/wllama.wasm',
+  'asyncify/multi-thread/wllama.wasm':
+    '/src/asyncify-multi-thread/wllama.wasm',
 };
 
 const TINY_MODEL =
   'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
+
+const TEST_WLLAMA_CONFIG = {
+  suppressNativeLog: true,
+  logger: LoggerWithoutDebug,
+};
 
 const testFunc = async (wllama: WllamaMJS) => {
   await wllama.loadModelFromUrl(TINY_MODEL, {
@@ -40,11 +50,11 @@ const testFunc = async (wllama: WllamaMJS) => {
 };
 
 test.sequential('(mjs) generates completion', async () => {
-  const wllama = new WllamaMJS(CONFIG_PATHS);
+  const wllama = new WllamaMJS(CONFIG_PATHS, TEST_WLLAMA_CONFIG);
   await testFunc(wllama);
 });
 
 test.sequential('(mjs/minified) generates completion', async () => {
-  const wllama = new WllamaMJSMinified(CONFIG_PATHS);
+  const wllama = new WllamaMJSMinified(CONFIG_PATHS, TEST_WLLAMA_CONFIG);
   await testFunc(wllama as unknown as WllamaMJS);
 });
