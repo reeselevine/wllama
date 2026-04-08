@@ -202,8 +202,23 @@ const patchMEMFS = () => {
 
   // replace "mmap" functions
   m.MEMFS.stream_ops.mmap = function (stream, length, position, prot, flags) {
-    patchStream(stream);
     const name = stream.node.name;
+    if (opfsHandles[name]) {
+      // OPFS-backed files must never be mmap'd — that would copy the entire model
+      // onto the WASM heap, defeating the whole point of the OPFS path.
+      // use_mmap=false is set in wllama.ts for WebGPU loads, so llama.cpp should
+      // never reach this branch. If it does, throw immediately so the bug is visible.
+      console.error(`[OPFS] mmap called on OPFS-backed file "${name}" (length=${length}, position=${position}). This should never happen when use_mmap=false is set. Please report this as a bug.`);
+      throw new Error(
+        `[wllama] mmap called on OPFS-backed file "${name}". ` +
+        `This should never happen when use_mmap=false is set. ` +
+        `Please report this as a bug.`
+      );
+    }
+    
+    console.debug(`[OPFS] mmap: file="${name}", length=${length}, position=${position}`);  
+    patchStream(stream);
+  
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
       return {
@@ -391,6 +406,21 @@ onmessage = async (e) => {
     return;
   }
 
+  if (verb === 'fs.opfs-alloc') {
+    const argLogicalName = args[0];
+    const argOpfsCacheFileName = args[1];
+    console.debug(`[OPFS] received fs.opfs-alloc: logicalName="${argLogicalName}" opfsCacheFileName="${argOpfsCacheFileName}"`);
+    try {
+      const size = await opfsAlloc(argLogicalName, argOpfsCacheFileName);
+      console.debug(`[OPFS] fs.opfs-alloc complete: "${argLogicalName}" size=${size}`);
+      msg({ callbackId, result: { size } });
+    } catch (err) {
+      console.error(`[OPFSFS] fs.opfs-alloc failed for "${argLogicalName}": ${err}`);
+      msg({ callbackId, err });
+    }
+    return;
+  }
+
   if (verb === 'fs.write') {
     const argFileId = args[0];
     const argBuffer = args[1];
@@ -437,6 +467,14 @@ onmessage = async (e) => {
         outputLen
       );
       outputBuffer.set(outputSrcView, 0); // copy it
+
+      // After the model is loaded into WebGPU buffers, we can delete
+      // the OPFS copy.
+      const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
+      console.debug("[HeapFS] action=load useWebGPU=" + useWebGPU);
+      if (argAction === 'load' && useWebGPU) {
+        opfsFreeAll(); 
+      }
       msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
     } catch (err) {
       msg({ callbackId, err });
