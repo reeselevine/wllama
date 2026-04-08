@@ -121,11 +121,22 @@ const getWasmMemory = () => {
  * Note 29/05/2024 @ngxson
  * Due to ftell() being limited to MAX_LONG, we cannot load files bigger than 2^31 bytes (or 2GB)
  * Ref: https://github.com/emscripten-core/emscripten/blob/main/system/lib/libc/musl/src/stdio/ftell.c
+ * 
+ * For WebGPU, we want to extend this idea one level further to 
+ * avoid hitting memory limits, especially on mobile devices.
+ * Download models directly to disk via OPFS, avoiding the WASM
+ * heap to prevent growing the heap and having an extra copy of the model.
+ * Then, stream it from disk directly to llama.cpp. We still need to
+ * support async tensor uploads in llama.cpp WebGPU backend, which should
+ * decrease memory usage even further.
+ * 
+ * Note that the model cache manager is already backed by OPFS.
  */
 
 const fsNameToFile = {}; // map Name => File
 const fsIdToFile = {}; // map ID => File
 let currFileId = 0;
+const opfsHandles = {} // map Name => { synchandle, size } for OPFS-backed files
 
 // Patch and redirect memfs calls to wllama
 const patchMEMFS = () => {
@@ -222,6 +233,30 @@ const heapfsWrite = (id, buffer, offset) => {
     throw new Error(`File ID ${id} not found in heapfs`);
   }
 };
+
+const opfsAlloc = async (logicalName, opfsCacheFileName) => {
+  const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
+  console.log(`[OPFS] opfsAlloc: logicalName="${logicalName}" 
+    opfsCacheFileName="${opfsCacheFileName}"`);
+
+  const opfsRoot = await navigator.storage.getDirectory();
+  const cacheDir = await opfsRoot.getDirectoryHandle('cache');
+  const fileHandle = await cacheDir.getFileHandle(opfsCacheFileName);
+  const syncHandle = await fileHandle.createSyncAccessHandle();
+  const size = syncHandle.getSize();
+  opfsHandles[logicalName] = { syncHandle, size };
+    
+  console.debug(`[OPFS] registered sync handle for "${logicalName}", size="${mb(size)}"`);
+  
+  // TODO(nikhil.jain) what is this for?
+  Module['FS_createDataFile']('/models', logicalName, new Uint8Array(0), true, true, true);
+  // Set usedBytes so fstat() returns the real file size.
+  Module.FS.lookupPath('/models/' + logicalName).node.usedBytes = size;
+  console.log(`[OPFS] opfsAlloc: created MEMFS placeholder at /models/${logicalName} with usedBytes=${size}`);
+
+  return size;
+
+}
 
 //////////////////////////////////////////////////////////////
 // MAIN CODE
