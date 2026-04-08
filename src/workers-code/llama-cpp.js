@@ -121,22 +121,22 @@ const getWasmMemory = () => {
  * Note 29/05/2024 @ngxson
  * Due to ftell() being limited to MAX_LONG, we cannot load files bigger than 2^31 bytes (or 2GB)
  * Ref: https://github.com/emscripten-core/emscripten/blob/main/system/lib/libc/musl/src/stdio/ftell.c
- * 
- * For WebGPU, we want to extend this idea one level further to 
+ *
+ * For WebGPU, we want to extend this idea one level further to
  * avoid hitting memory limits, especially on mobile devices.
  * Download models directly to disk via OPFS, avoiding the WASM
  * heap to prevent growing the heap and having an extra copy of the model.
  * Then, stream it from disk directly to llama.cpp. We still need to
  * support async tensor uploads in llama.cpp WebGPU backend, which should
  * decrease memory usage even further.
- * 
+ *
  * Note that the model cache manager is already backed by OPFS.
  */
 
 const fsNameToFile = {}; // map Name => File
 const fsIdToFile = {}; // map ID => File
 let currFileId = 0;
-const opfsHandles = {} // map Name => { synchandle, size } for OPFS-backed files
+const opfsHandles = {}; // map Name => { synchandle, size } for OPFS-backed files
 
 // Patch and redirect memfs calls to wllama
 const patchMEMFS = () => {
@@ -167,12 +167,16 @@ const patchMEMFS = () => {
     position
   ) {
     const name = stream.node.name;
-    // OPFS-backed path for WebGPU 
+    // OPFS-backed path for WebGPU
     if (opfsHandles[name]) {
       const { syncHandle, size } = opfsHandles[name];
       const toRead = Math.min(length, size - position);
       if (toRead <= 0) return 0;
-      const view = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, toRead);
+      const view = new Uint8Array(
+        buffer.buffer,
+        buffer.byteOffset + offset,
+        toRead
+      );
       return syncHandle.read(view, { at: position });
     }
     // WASM heap-backed path for WASM
@@ -184,7 +188,7 @@ const patchMEMFS = () => {
   // replace "llseek" functions
   m.MEMFS.stream_ops.llseek = function (stream, offset, whence) {
     const name = stream.node.name;
-    // OPFS-backed path for WebGPU 
+    // OPFS-backed path for WebGPU
     if (opfsHandles[name]) {
       const { size } = opfsHandles[name];
       let newPos = offset;
@@ -208,17 +212,21 @@ const patchMEMFS = () => {
       // onto the WASM heap, defeating the whole point of the OPFS path.
       // use_mmap=false is set in wllama.ts for WebGPU loads, so llama.cpp should
       // never reach this branch. If it does, throw immediately so the bug is visible.
-      console.error(`[OPFS] mmap called on OPFS-backed file "${name}" (length=${length}, position=${position}). This should never happen when use_mmap=false is set. Please report this as a bug.`);
+      console.error(
+        `[OPFS] mmap called on OPFS-backed file "${name}" (length=${length}, position=${position}). This should never happen when use_mmap=false is set. Please report this as a bug.`
+      );
       throw new Error(
         `[wllama] mmap called on OPFS-backed file "${name}". ` +
-        `This should never happen when use_mmap=false is set. ` +
-        `Please report this as a bug.`
+          `This should never happen when use_mmap=false is set. ` +
+          `Please report this as a bug.`
       );
     }
-    
-    console.debug(`[OPFS] mmap: file="${name}", length=${length}, position=${position}`);  
+
+    console.debug(
+      `[OPFS] mmap: file="${name}", length=${length}, position=${position}`
+    );
     patchStream(stream);
-  
+
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
       return {
@@ -282,18 +290,28 @@ const opfsAlloc = async (logicalName, opfsCacheFileName) => {
   const syncHandle = await fileHandle.createSyncAccessHandle();
   const size = syncHandle.getSize();
   opfsHandles[logicalName] = { syncHandle, size };
-    
-  console.debug(`[OPFS] registered sync handle for "${logicalName}", size="${mb(size)}"`);
-  
+
+  console.debug(
+    `[OPFS] registered sync handle for "${logicalName}", size="${mb(size)}"`
+  );
+
   // TODO(nikhil.jain) what is this for?
-  Module['FS_createDataFile']('/models', logicalName, new Uint8Array(0), true, true, true);
+  Module['FS_createDataFile'](
+    '/models',
+    logicalName,
+    new Uint8Array(0),
+    true,
+    true,
+    true
+  );
   // Set usedBytes so fstat() returns the real file size.
   Module.FS.lookupPath('/models/' + logicalName).node.usedBytes = size;
-  console.log(`[OPFS] opfsAlloc: created MEMFS placeholder at /models/${logicalName} with usedBytes=${size}`);
+  console.log(
+    `[OPFS] opfsAlloc: created MEMFS placeholder at /models/${logicalName} with usedBytes=${size}`
+  );
 
   return size;
-
-}
+};
 
 const opfsFreeAll = () => {
   const names = Object.keys(opfsHandles);
@@ -301,20 +319,24 @@ const opfsFreeAll = () => {
     console.debug(`[OPFS] opfsFreeAll: no OPFS handles to free`);
     return;
   }
-  console.debug(`[OPFS] opfsFreeAll: freeing ${names.length} OPFS handles: ${names.join(', ')}`);
+  console.debug(
+    `[OPFS] opfsFreeAll: freeing ${names.length} OPFS handles: ${names.join(', ')}`
+  );
   for (const [name, { syncHandle }] of Object.entries(opfsHandles)) {
     try {
       console.debug(`[OPFS] opfsFreeAll: closing handle for "${name}"`);
       syncHandle.close();
       Module.FS.unlink('/models/' + name);
-      console.debug(`[OPFS] opfsFreeAll: successfully closed handle for "${name}"`);
-    } catch(e) {
-      console.warn('[OPFS] Error freeing ' + name + ": " + e);
+      console.debug(
+        `[OPFS] opfsFreeAll: successfully closed handle for "${name}"`
+      );
+    } catch (e) {
+      console.warn('[OPFS] Error freeing ' + name + ': ' + e);
     }
     delete opfsHandles[name];
   }
   console.debug(`[OPFS] opfsFreeAll: done`);
-}
+};
 
 //////////////////////////////////////////////////////////////
 // MAIN CODE
@@ -409,13 +431,19 @@ onmessage = async (e) => {
   if (verb === 'fs.opfs-alloc') {
     const argLogicalName = args[0];
     const argOpfsCacheFileName = args[1];
-    console.debug(`[OPFS] received fs.opfs-alloc: logicalName="${argLogicalName}" opfsCacheFileName="${argOpfsCacheFileName}"`);
+    console.debug(
+      `[OPFS] received fs.opfs-alloc: logicalName="${argLogicalName}" opfsCacheFileName="${argOpfsCacheFileName}"`
+    );
     try {
       const size = await opfsAlloc(argLogicalName, argOpfsCacheFileName);
-      console.debug(`[OPFS] fs.opfs-alloc complete: "${argLogicalName}" size=${size}`);
+      console.debug(
+        `[OPFS] fs.opfs-alloc complete: "${argLogicalName}" size=${size}`
+      );
       msg({ callbackId, result: { size } });
     } catch (err) {
-      console.error(`[OPFSFS] fs.opfs-alloc failed for "${argLogicalName}": ${err}`);
+      console.error(
+        `[OPFSFS] fs.opfs-alloc failed for "${argLogicalName}": ${err}`
+      );
       msg({ callbackId, err });
     }
     return;
@@ -471,9 +499,9 @@ onmessage = async (e) => {
       // After the model is loaded into WebGPU buffers, we can delete
       // the OPFS copy.
       const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
-      console.debug("[HeapFS] action=load useWebGPU=" + useWebGPU);
+      console.debug('[HeapFS] action=load useWebGPU=' + useWebGPU);
       if (argAction === 'load' && useWebGPU) {
-        opfsFreeAll(); 
+        opfsFreeAll();
       }
       msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
     } catch (err) {
