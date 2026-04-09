@@ -684,7 +684,7 @@ export class Wllama {
     // load the model
     const loadResult: GlueMsgLoadRes = await this.proxy.wllamaAction('load', {
       _name: 'load_req',
-      use_mmap: !useOpfsLoad, // OPFS path uses fread; heap path can use mmap
+      use_mmap: !useOpfsLoad, // OPFS path uses fread, which calls the overriden read handle; heap path can use mmap
       use_mlock: !useOpfsLoad, // nothing to mlock on WASM heap when using OPFS
       use_webgpu: this.useWebGPU,
       n_gpu_layers: this.useWebGPU ? 999 : 0,
