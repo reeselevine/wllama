@@ -240,7 +240,10 @@ class CacheManager {
     const list = await this.list();
     for (const item of list) {
       if (predicate(item)) {
-        cacheDir.removeEntry(item.name);
+        await cacheDir.removeEntry(item.name);
+        await cacheDir
+          .removeEntry(`${PREFIX_METADATA}${item.name}`)
+          .catch(() => {});
       }
     }
   }

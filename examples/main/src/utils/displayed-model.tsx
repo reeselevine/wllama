@@ -58,7 +58,8 @@ interface UserAddedModel {
 }
 
 export function isIQuantModel(nameOrUrl: string): boolean {
-  const normalized = nameOrUrl.replace(/\?.*/, '').split('/').pop() ?? nameOrUrl;
+  const normalized =
+    nameOrUrl.replace(/\?.*/, '').split('/').pop() ?? nameOrUrl;
   return normalized.toUpperCase().includes('IQ');
 }
 
