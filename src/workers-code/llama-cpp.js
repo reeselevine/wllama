@@ -222,9 +222,6 @@ const patchMEMFS = () => {
       );
     }
 
-    console.debug(
-      `[OPFS] mmap: file="${name}", length=${length}, position=${position}`
-    );
     patchStream(stream);
 
     if (fsNameToFile[name]) {
@@ -291,10 +288,6 @@ const opfsAlloc = async (logicalName, opfsCacheFileName) => {
   const size = syncHandle.getSize();
   opfsHandles[logicalName] = { syncHandle, size };
 
-  console.debug(
-    `[OPFS] registered sync handle for "${logicalName}", size="${mb(size)}"`
-  );
-
   // Create a handle in MEMfs so Emscripten can refer to the file
   Module['FS_createDataFile'](
     '/models',
@@ -315,27 +308,15 @@ const opfsAlloc = async (logicalName, opfsCacheFileName) => {
 
 const opfsFreeAll = () => {
   const names = Object.keys(opfsHandles);
-  if (names.length === 0) {
-    console.debug(`[OPFS] opfsFreeAll: no OPFS handles to free`);
-    return;
-  }
-  console.debug(
-    `[OPFS] opfsFreeAll: freeing ${names.length} OPFS handles: ${names.join(', ')}`
-  );
   for (const [name, { syncHandle }] of Object.entries(opfsHandles)) {
     try {
-      console.debug(`[OPFS] opfsFreeAll: closing handle for "${name}"`);
       syncHandle.close();
       Module.FS.unlink('/models/' + name);
-      console.debug(
-        `[OPFS] opfsFreeAll: successfully closed handle for "${name}"`
-      );
     } catch (e) {
       console.warn('[OPFS] Error freeing ' + name + ': ' + e);
     }
     delete opfsHandles[name];
   }
-  console.debug(`[OPFS] opfsFreeAll: done`);
 };
 
 //////////////////////////////////////////////////////////////
@@ -431,19 +412,10 @@ onmessage = async (e) => {
   if (verb === 'fs.opfs-alloc') {
     const argLogicalName = args[0];
     const argOpfsCacheFileName = args[1];
-    console.debug(
-      `[OPFS] received fs.opfs-alloc: logicalName="${argLogicalName}" opfsCacheFileName="${argOpfsCacheFileName}"`
-    );
     try {
       const size = await opfsAlloc(argLogicalName, argOpfsCacheFileName);
-      console.debug(
-        `[OPFS] fs.opfs-alloc complete: "${argLogicalName}" size=${size}`
-      );
       msg({ callbackId, result: { size } });
     } catch (err) {
-      console.error(
-        `[OPFSFS] fs.opfs-alloc failed for "${argLogicalName}": ${err}`
-      );
       msg({ callbackId, err });
     }
     return;
@@ -499,7 +471,6 @@ onmessage = async (e) => {
       // After the model is loaded into WebGPU buffers, we can delete
       // the OPFS copy.
       const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
-      console.debug('[HeapFS] action=load useWebGPU=' + useWebGPU);
       if (argAction === 'load' && useWebGPU) {
         opfsFreeAll();
       }
