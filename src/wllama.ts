@@ -572,17 +572,6 @@ export class Wllama {
     ggufBlobsOrModel: Blob[] | Model,
     config: LoadModelConfig = {}
   ): Promise<void> {
-    const blobs: Blob[] =
-      ggufBlobsOrModel instanceof Model
-        ? await ggufBlobsOrModel.open()
-        : [...(ggufBlobsOrModel as Blob[])]; // copy array
-    if (blobs.some((b) => b.size === 0)) {
-      throw new WllamaError(
-        'Input model (or splits) must be non-empty Blob or File',
-        'load_error'
-      );
-    }
-    sortFileByShard(blobs);
     if (this.proxy) {
       throw new WllamaError('Module is already initialized', 'load_error');
     }
@@ -601,7 +590,26 @@ export class Wllama {
         );
       }
     }
-    // detec if we can use JSPI
+
+    // When WebGPU is active and the model comes from the cache (a Model object),
+    // we read directly from OPFS in the worker instead of streaming to WASM heap.
+    const useOpfsLoad = this.useWebGPU && ggufBlobsOrModel instanceof Model;
+    let blobs: Blob[] = [];
+    if (!useOpfsLoad) {
+      blobs =
+        ggufBlobsOrModel instanceof Model
+          ? await ggufBlobsOrModel.open()
+          : [...(ggufBlobsOrModel as Blob[])];
+      if (blobs.some((b) => b.size === 0)) {
+        throw new WllamaError(
+          'Input model (or splits) must be non-empty Blob or File',
+          'load_error'
+        );
+      }
+      sortFileByShard(blobs);
+    }
+
+    // detect if we can use JSPI
     const hasJspi = 'Suspending' in WebAssembly;
     const multiThreadPath = hasJspi
       ? this.pathConfig['jspi/multi-thread/wllama.wasm']
@@ -646,10 +654,12 @@ export class Wllama {
       ? {
           'wllama.wasm': absoluteUrl(multiThreadPath!),
           'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.useWebGPU': this.useWebGPU,
         }
       : {
           'wllama.wasm': absoluteUrl(singleThreadPath!),
           'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.useWebGPU': this.useWebGPU,
         };
     this.proxy = new ProxyToWorker(
       mPathConfig,
@@ -657,10 +667,12 @@ export class Wllama {
       this.config.suppressNativeLog ?? false,
       this.logger()
     );
-    const modelFiles = blobs.map((blob, i) => ({
-      name: `model-${i}.gguf`,
-      blob,
-    }));
+    const modelFiles = useOpfsLoad
+      ? (ggufBlobsOrModel as Model).files.map((f, i) => ({
+          name: `model-${i}.gguf`,
+          opfsCacheName: f.name,
+        }))
+      : blobs.map((blob, i) => ({ name: `model-${i}.gguf`, blob }));
     await this.proxy.moduleInit(modelFiles);
     // run it
     const startResult: any = await this.proxy.wllamaStart();
@@ -672,8 +684,8 @@ export class Wllama {
     // load the model
     const loadResult: GlueMsgLoadRes = await this.proxy.wllamaAction('load', {
       _name: 'load_req',
-      use_mmap: true,
-      use_mlock: true,
+      use_mmap: !useOpfsLoad, // OPFS path uses fread, which calls the overriden read handle; heap path can use mmap
+      use_mlock: !useOpfsLoad, // nothing to mlock on WASM heap when using OPFS
       use_webgpu: this.useWebGPU,
       n_gpu_layers: this.useWebGPU ? 999 : 0,
       no_perf: this.config.noPerf ?? false,
