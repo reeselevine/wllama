@@ -4775,11 +4775,6 @@ Module['FS'] = FS;
 Module['FS_createDataFile'] = FS_createDataFile;
 Module['FS_createLazyFile'] = FS_createLazyFile;
 Module['MEMFS'] = MEMFS;
-function ggml_webgpu_is_ios_browser() {
-  const ua = navigator.userAgent;
-  return ua.includes('iPhone') || ua.includes('iPad') ? 1 : 0;
-}
-ggml_webgpu_is_ios_browser.sig = 'i';
 var _wllama_malloc,
   _wllama_start,
   _wllama_action,
@@ -4909,7 +4904,6 @@ var wasmImports = {
   fd_read: _fd_read,
   fd_seek: _fd_seek,
   fd_write: _fd_write,
-  ggml_webgpu_is_ios_browser,
   memory: wasmMemory,
   proc_exit: _proc_exit,
   random_get: _random_get,

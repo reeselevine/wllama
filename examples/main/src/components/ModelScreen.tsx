@@ -7,7 +7,7 @@ import {
   faWarning,
   faCheck,
 } from '@fortawesome/free-solid-svg-icons';
-import { DEFAULT_INFERENCE_PARAMS, MAX_GGUF_SIZE } from '../config';
+import { DEFAULT_INFERENCE_PARAMS } from '../config';
 import {
   getWebGPUMemoryBudget,
   toHumanReadableSize,
@@ -15,7 +15,7 @@ import {
 } from '../utils/utils';
 import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
-import { DisplayedModel, isIQuantModel } from '../utils/displayed-model';
+import { DisplayedModel } from '../utils/displayed-model';
 import { isValidGgufFile } from '@wllama/wllama';
 
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
@@ -271,7 +271,7 @@ function AddCustomModelDialog({ onClose }: { onClose(): void }) {
             getSelectableGgufFiles(
               data.siblings
                 .map((s) => s.rfilename)
-                .filter((f) => isValidGgufFile(f) && !isIQuantModel(f))
+                .filter((f) => isValidGgufFile(f))
             )
           );
           setErr('');
@@ -428,16 +428,6 @@ function ModelCard({
             HF repo: {m.hfModel}
             <br />
             Size: {toHumanReadableSize(m.size)}
-            {m.size > MAX_GGUF_SIZE && (
-              <div
-                className="tooltip tooltip-right"
-                data-tip="Big model size, may not be able to load due to RAM limitation"
-              >
-                <span className="text-yellow-300 ml-2">
-                  <FontAwesomeIcon icon={faWarning} />
-                </span>
-              </div>
-            )}
             {m.state == ModelState.DOWNLOADING
               ? ` - Downloaded: ${percent}%`
               : ''}

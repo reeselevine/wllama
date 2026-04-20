@@ -246,7 +246,7 @@ function initRuntime() {
   if (ENVIRONMENT_IS_PTHREAD) return startWorker();
   if (!Module['noFSInit'] && !FS.initialized) FS.init();
   TTY.init();
-  wasmExports['Eb']();
+  wasmExports['Fb']();
   FS.ignorePermissions = false;
 }
 function preMain() {}
@@ -330,7 +330,7 @@ async function createWasm() {
     wasmExports = instance.exports;
     wasmExports = Asyncify.instrumentWasmExports(wasmExports);
     wasmExports = applySignatureConversions(wasmExports);
-    registerTLSInit(wasmExports['nc']);
+    registerTLSInit(wasmExports['oc']);
     assignWasmExports(wasmExports);
     wasmModule = module;
     removeRunDependency('wasm-instantiate');
@@ -5720,10 +5720,6 @@ var proxiedFunctionTable = [
   _fd_seek,
   _fd_write,
 ];
-function ggml_webgpu_is_ios_browser() {
-  const ua = navigator.userAgent;
-  return ua.includes('iPhone') || ua.includes('iPad') ? 1 : 0;
-}
 var _wllama_malloc,
   _wllama_start,
   _wllama_action,
@@ -5806,14 +5802,16 @@ var _wllama_malloc,
   dynCall_iiiiiiiiiiiiiii,
   dynCall_iij,
   dynCall_iiiiiiiiii,
+  dynCall_viiiiijjjji,
   dynCall_viiiiijjj,
-  dynCall_iiijjj,
+  dynCall_viiiijjji,
   dynCall_iiijj,
+  dynCall_iiijjj,
   dynCall_iiiiiiiiiffffffi,
-  dynCall_iiiiiiiiifi,
+  dynCall_iiiiiiiiiifi,
   dynCall_iiiiiiiiiiiijjiifiiiiiii,
   dynCall_iiiiiiiiiiiiiiii,
-  dynCall_iiiiiiiifi,
+  dynCall_iiiiiiiiifi,
   dynCall_iiiiiiji,
   dynCall_iiif,
   dynCall_iiiiff,
@@ -5823,24 +5821,24 @@ var _wllama_malloc,
   dynCall_viid,
   dynCall_iiijjjj,
   dynCall_i,
+  dynCall_iiij,
+  dynCall_ji,
   dynCall_iiiiijiiijjjjjjj,
   dynCall_viiiiiiiii,
   dynCall_iiiff,
   dynCall_j,
-  dynCall_ji,
   dynCall_vj,
   dynCall_viijii,
   dynCall_viijijj,
   dynCall_viiiij,
   dynCall_viiij,
-  dynCall_iiij,
+  dynCall_viiiiiii,
   dynCall_iiid,
   dynCall_jiji,
   dynCall_iidiiii,
   dynCall_jiiii,
   dynCall_fiii,
   dynCall_diii,
-  dynCall_viiiiiii,
   dynCall_viiiiiiiiii,
   dynCall_viiiiiiiiiiiiiii,
   dynCall_viij,
@@ -5857,281 +5855,284 @@ var _wllama_malloc,
   __indirect_function_table,
   wasmTable;
 function assignWasmExports(wasmExports) {
-  _wllama_malloc = Module['_wllama_malloc'] = wasmExports['Fb'];
-  _wllama_start = Module['_wllama_start'] = wasmExports['Gb'];
-  _wllama_action = Module['_wllama_action'] = wasmExports['Hb'];
-  _wllama_exit = Module['_wllama_exit'] = wasmExports['Ib'];
-  _wllama_debug = Module['_wllama_debug'] = wasmExports['Jb'];
-  _main = Module['_main'] = wasmExports['Kb'];
-  _malloc = wasmExports['Lb'];
-  _free = wasmExports['Mb'];
-  _emwgpuCreateBindGroup = wasmExports['Nb'];
-  _emwgpuCreateBindGroupLayout = wasmExports['Ob'];
-  _emwgpuCreateCommandBuffer = wasmExports['Pb'];
-  _emwgpuCreateCommandEncoder = wasmExports['Qb'];
-  _emwgpuCreateComputePassEncoder = wasmExports['Rb'];
-  _emwgpuCreateComputePipeline = wasmExports['Sb'];
-  _emwgpuCreateExternalTexture = wasmExports['Tb'];
-  _emwgpuCreatePipelineLayout = wasmExports['Ub'];
-  _emwgpuCreateQuerySet = wasmExports['Vb'];
-  _emwgpuCreateRenderBundle = wasmExports['Wb'];
-  _emwgpuCreateRenderBundleEncoder = wasmExports['Xb'];
-  _emwgpuCreateRenderPassEncoder = wasmExports['Yb'];
-  _emwgpuCreateRenderPipeline = wasmExports['Zb'];
-  _emwgpuCreateSampler = wasmExports['_b'];
-  _emwgpuCreateSurface = wasmExports['$b'];
-  _emwgpuCreateTexture = wasmExports['ac'];
-  _emwgpuCreateTextureView = wasmExports['bc'];
-  _emwgpuCreateAdapter = wasmExports['cc'];
-  _emwgpuCreateBuffer = wasmExports['dc'];
-  _emwgpuCreateDevice = wasmExports['ec'];
-  _emwgpuCreateQueue = wasmExports['fc'];
-  _emwgpuCreateShaderModule = wasmExports['gc'];
-  _emwgpuOnDeviceLostCompleted = wasmExports['hc'];
-  _emwgpuOnMapAsyncCompleted = wasmExports['ic'];
-  _emwgpuOnRequestAdapterCompleted = wasmExports['jc'];
-  _emwgpuOnRequestDeviceCompleted = wasmExports['kc'];
-  _emwgpuOnWorkDoneCompleted = wasmExports['lc'];
-  _emwgpuOnUncapturedError = wasmExports['mc'];
-  __emscripten_tls_init = wasmExports['nc'];
-  _pthread_self = wasmExports['oc'];
-  _emscripten_builtin_memalign = wasmExports['pc'];
-  __emscripten_thread_init = wasmExports['rc'];
-  __emscripten_thread_crashed = wasmExports['sc'];
-  __emscripten_run_js_on_main_thread = wasmExports['tc'];
-  __emscripten_thread_free_data = wasmExports['uc'];
-  __emscripten_thread_exit = wasmExports['vc'];
-  __emscripten_timeout = wasmExports['wc'];
-  __emscripten_check_mailbox = wasmExports['xc'];
-  _memalign = wasmExports['yc'];
-  _setThrew = wasmExports['zc'];
-  __emscripten_tempret_set = wasmExports['Ac'];
-  _emscripten_stack_set_limits = wasmExports['Bc'];
-  __emscripten_stack_restore = wasmExports['Cc'];
-  __emscripten_stack_alloc = wasmExports['Dc'];
-  _emscripten_stack_get_current = wasmExports['Ec'];
-  ___cxa_decrement_exception_refcount = wasmExports['Fc'];
-  ___cxa_increment_exception_refcount = wasmExports['Gc'];
-  ___cxa_can_catch = wasmExports['Hc'];
-  ___cxa_get_exception_ptr = wasmExports['Ic'];
-  dynCall_v = dynCalls['v'] = wasmExports['Jc'];
-  dynCall_ii = dynCalls['ii'] = wasmExports['Kc'];
-  dynCall_iii = dynCalls['iii'] = wasmExports['Lc'];
-  dynCall_vi = dynCalls['vi'] = wasmExports['Mc'];
-  dynCall_viii = dynCalls['viii'] = wasmExports['Nc'];
-  dynCall_viiiii = dynCalls['viiiii'] = wasmExports['Oc'];
-  dynCall_vii = dynCalls['vii'] = wasmExports['Pc'];
-  dynCall_iiiiiii = dynCalls['iiiiiii'] = wasmExports['Qc'];
-  dynCall_iiiii = dynCalls['iiiii'] = wasmExports['Rc'];
-  dynCall_iiiiii = dynCalls['iiiiii'] = wasmExports['Sc'];
-  dynCall_viiiiii = dynCalls['viiiiii'] = wasmExports['Tc'];
-  dynCall_vij = dynCalls['vij'] = wasmExports['Uc'];
-  dynCall_jii = dynCalls['jii'] = wasmExports['Vc'];
-  dynCall_viiii = dynCalls['viiii'] = wasmExports['Wc'];
-  dynCall_iiii = dynCalls['iiii'] = wasmExports['Xc'];
-  dynCall_iiiiiiii = dynCalls['iiiiiiii'] = wasmExports['Yc'];
-  dynCall_iifff = dynCalls['iifff'] = wasmExports['Zc'];
-  dynCall_iiiffiiii = dynCalls['iiiffiiii'] = wasmExports['_c'];
-  dynCall_ifi = dynCalls['ifi'] = wasmExports['$c'];
-  dynCall_iiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiii'] = wasmExports['ad'];
-  dynCall_iiiiiiiii = dynCalls['iiiiiiiii'] = wasmExports['bd'];
+  _wllama_malloc = Module['_wllama_malloc'] = wasmExports['Gb'];
+  _wllama_start = Module['_wllama_start'] = wasmExports['Hb'];
+  _wllama_action = Module['_wllama_action'] = wasmExports['Ib'];
+  _wllama_exit = Module['_wllama_exit'] = wasmExports['Jb'];
+  _wllama_debug = Module['_wllama_debug'] = wasmExports['Kb'];
+  _main = Module['_main'] = wasmExports['Lb'];
+  _malloc = wasmExports['Mb'];
+  _free = wasmExports['Nb'];
+  _emwgpuCreateBindGroup = wasmExports['Ob'];
+  _emwgpuCreateBindGroupLayout = wasmExports['Pb'];
+  _emwgpuCreateCommandBuffer = wasmExports['Qb'];
+  _emwgpuCreateCommandEncoder = wasmExports['Rb'];
+  _emwgpuCreateComputePassEncoder = wasmExports['Sb'];
+  _emwgpuCreateComputePipeline = wasmExports['Tb'];
+  _emwgpuCreateExternalTexture = wasmExports['Ub'];
+  _emwgpuCreatePipelineLayout = wasmExports['Vb'];
+  _emwgpuCreateQuerySet = wasmExports['Wb'];
+  _emwgpuCreateRenderBundle = wasmExports['Xb'];
+  _emwgpuCreateRenderBundleEncoder = wasmExports['Yb'];
+  _emwgpuCreateRenderPassEncoder = wasmExports['Zb'];
+  _emwgpuCreateRenderPipeline = wasmExports['_b'];
+  _emwgpuCreateSampler = wasmExports['$b'];
+  _emwgpuCreateSurface = wasmExports['ac'];
+  _emwgpuCreateTexture = wasmExports['bc'];
+  _emwgpuCreateTextureView = wasmExports['cc'];
+  _emwgpuCreateAdapter = wasmExports['dc'];
+  _emwgpuCreateBuffer = wasmExports['ec'];
+  _emwgpuCreateDevice = wasmExports['fc'];
+  _emwgpuCreateQueue = wasmExports['gc'];
+  _emwgpuCreateShaderModule = wasmExports['hc'];
+  _emwgpuOnDeviceLostCompleted = wasmExports['ic'];
+  _emwgpuOnMapAsyncCompleted = wasmExports['jc'];
+  _emwgpuOnRequestAdapterCompleted = wasmExports['kc'];
+  _emwgpuOnRequestDeviceCompleted = wasmExports['lc'];
+  _emwgpuOnWorkDoneCompleted = wasmExports['mc'];
+  _emwgpuOnUncapturedError = wasmExports['nc'];
+  __emscripten_tls_init = wasmExports['oc'];
+  _pthread_self = wasmExports['pc'];
+  _emscripten_builtin_memalign = wasmExports['qc'];
+  __emscripten_thread_init = wasmExports['sc'];
+  __emscripten_thread_crashed = wasmExports['tc'];
+  __emscripten_run_js_on_main_thread = wasmExports['uc'];
+  __emscripten_thread_free_data = wasmExports['vc'];
+  __emscripten_thread_exit = wasmExports['wc'];
+  __emscripten_timeout = wasmExports['xc'];
+  __emscripten_check_mailbox = wasmExports['yc'];
+  _memalign = wasmExports['zc'];
+  _setThrew = wasmExports['Ac'];
+  __emscripten_tempret_set = wasmExports['Bc'];
+  _emscripten_stack_set_limits = wasmExports['Cc'];
+  __emscripten_stack_restore = wasmExports['Dc'];
+  __emscripten_stack_alloc = wasmExports['Ec'];
+  _emscripten_stack_get_current = wasmExports['Fc'];
+  ___cxa_decrement_exception_refcount = wasmExports['Gc'];
+  ___cxa_increment_exception_refcount = wasmExports['Hc'];
+  ___cxa_can_catch = wasmExports['Ic'];
+  ___cxa_get_exception_ptr = wasmExports['Jc'];
+  dynCall_v = dynCalls['v'] = wasmExports['Kc'];
+  dynCall_ii = dynCalls['ii'] = wasmExports['Lc'];
+  dynCall_iii = dynCalls['iii'] = wasmExports['Mc'];
+  dynCall_vi = dynCalls['vi'] = wasmExports['Nc'];
+  dynCall_viii = dynCalls['viii'] = wasmExports['Oc'];
+  dynCall_viiiii = dynCalls['viiiii'] = wasmExports['Pc'];
+  dynCall_vii = dynCalls['vii'] = wasmExports['Qc'];
+  dynCall_iiiiiii = dynCalls['iiiiiii'] = wasmExports['Rc'];
+  dynCall_iiiii = dynCalls['iiiii'] = wasmExports['Sc'];
+  dynCall_iiiiii = dynCalls['iiiiii'] = wasmExports['Tc'];
+  dynCall_viiiiii = dynCalls['viiiiii'] = wasmExports['Uc'];
+  dynCall_vij = dynCalls['vij'] = wasmExports['Vc'];
+  dynCall_jii = dynCalls['jii'] = wasmExports['Wc'];
+  dynCall_viiii = dynCalls['viiii'] = wasmExports['Xc'];
+  dynCall_iiii = dynCalls['iiii'] = wasmExports['Yc'];
+  dynCall_iiiiiiii = dynCalls['iiiiiiii'] = wasmExports['Zc'];
+  dynCall_iifff = dynCalls['iifff'] = wasmExports['_c'];
+  dynCall_iiiffiiii = dynCalls['iiiffiiii'] = wasmExports['$c'];
+  dynCall_ifi = dynCalls['ifi'] = wasmExports['ad'];
+  dynCall_iiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiii'] = wasmExports['bd'];
+  dynCall_iiiiiiiii = dynCalls['iiiiiiiii'] = wasmExports['cd'];
   dynCall_iiiiiiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiiiiiii'] =
-    wasmExports['cd'];
-  dynCall_iiiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiiii'] = wasmExports['dd'];
-  dynCall_iij = dynCalls['iij'] = wasmExports['ed'];
-  dynCall_iiiiiiiiii = dynCalls['iiiiiiiiii'] = wasmExports['fd'];
-  dynCall_viiiiijjj = dynCalls['viiiiijjj'] = wasmExports['gd'];
-  dynCall_iiijjj = dynCalls['iiijjj'] = wasmExports['hd'];
-  dynCall_iiijj = dynCalls['iiijj'] = wasmExports['id'];
-  dynCall_iiiiiiiiiffffffi = dynCalls['iiiiiiiiiffffffi'] = wasmExports['jd'];
-  dynCall_iiiiiiiiifi = dynCalls['iiiiiiiiifi'] = wasmExports['kd'];
+    wasmExports['dd'];
+  dynCall_iiiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiiii'] = wasmExports['ed'];
+  dynCall_iij = dynCalls['iij'] = wasmExports['fd'];
+  dynCall_iiiiiiiiii = dynCalls['iiiiiiiiii'] = wasmExports['gd'];
+  dynCall_viiiiijjjji = dynCalls['viiiiijjjji'] = wasmExports['hd'];
+  dynCall_viiiiijjj = dynCalls['viiiiijjj'] = wasmExports['id'];
+  dynCall_viiiijjji = dynCalls['viiiijjji'] = wasmExports['jd'];
+  dynCall_iiijj = dynCalls['iiijj'] = wasmExports['kd'];
+  dynCall_iiijjj = dynCalls['iiijjj'] = wasmExports['ld'];
+  dynCall_iiiiiiiiiffffffi = dynCalls['iiiiiiiiiffffffi'] = wasmExports['md'];
+  dynCall_iiiiiiiiiifi = dynCalls['iiiiiiiiiifi'] = wasmExports['nd'];
   dynCall_iiiiiiiiiiiijjiifiiiiiii = dynCalls['iiiiiiiiiiiijjiifiiiiiii'] =
-    wasmExports['ld'];
-  dynCall_iiiiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiiiii'] = wasmExports['md'];
-  dynCall_iiiiiiiifi = dynCalls['iiiiiiiifi'] = wasmExports['nd'];
-  dynCall_iiiiiiji = dynCalls['iiiiiiji'] = wasmExports['od'];
-  dynCall_iiif = dynCalls['iiif'] = wasmExports['pd'];
-  dynCall_iiiiff = dynCalls['iiiiff'] = wasmExports['qd'];
-  dynCall_viijj = dynCalls['viijj'] = wasmExports['rd'];
-  dynCall_iiiiiiiiiiii = dynCalls['iiiiiiiiiiii'] = wasmExports['sd'];
-  dynCall_viif = dynCalls['viif'] = wasmExports['td'];
-  dynCall_viid = dynCalls['viid'] = wasmExports['ud'];
-  dynCall_iiijjjj = dynCalls['iiijjjj'] = wasmExports['vd'];
-  dynCall_i = dynCalls['i'] = wasmExports['wd'];
-  dynCall_iiiiijiiijjjjjjj = dynCalls['iiiiijiiijjjjjjj'] = wasmExports['xd'];
-  dynCall_viiiiiiiii = dynCalls['viiiiiiiii'] = wasmExports['yd'];
-  dynCall_iiiff = dynCalls['iiiff'] = wasmExports['zd'];
-  dynCall_j = dynCalls['j'] = wasmExports['Ad'];
+    wasmExports['od'];
+  dynCall_iiiiiiiiiiiiiiii = dynCalls['iiiiiiiiiiiiiiii'] = wasmExports['pd'];
+  dynCall_iiiiiiiiifi = dynCalls['iiiiiiiiifi'] = wasmExports['qd'];
+  dynCall_iiiiiiji = dynCalls['iiiiiiji'] = wasmExports['rd'];
+  dynCall_iiif = dynCalls['iiif'] = wasmExports['sd'];
+  dynCall_iiiiff = dynCalls['iiiiff'] = wasmExports['td'];
+  dynCall_viijj = dynCalls['viijj'] = wasmExports['ud'];
+  dynCall_iiiiiiiiiiii = dynCalls['iiiiiiiiiiii'] = wasmExports['vd'];
+  dynCall_viif = dynCalls['viif'] = wasmExports['wd'];
+  dynCall_viid = dynCalls['viid'] = wasmExports['xd'];
+  dynCall_iiijjjj = dynCalls['iiijjjj'] = wasmExports['yd'];
+  dynCall_i = dynCalls['i'] = wasmExports['zd'];
+  dynCall_iiij = dynCalls['iiij'] = wasmExports['Ad'];
   dynCall_ji = dynCalls['ji'] = wasmExports['Bd'];
-  dynCall_vj = dynCalls['vj'] = wasmExports['Cd'];
-  dynCall_viijii = dynCalls['viijii'] = wasmExports['Dd'];
-  dynCall_viijijj = dynCalls['viijijj'] = wasmExports['Ed'];
-  dynCall_viiiij = dynCalls['viiiij'] = wasmExports['Fd'];
-  dynCall_viiij = dynCalls['viiij'] = wasmExports['Gd'];
-  dynCall_iiij = dynCalls['iiij'] = wasmExports['Hd'];
-  dynCall_iiid = dynCalls['iiid'] = wasmExports['Id'];
-  dynCall_jiji = dynCalls['jiji'] = wasmExports['Jd'];
-  dynCall_iidiiii = dynCalls['iidiiii'] = wasmExports['Kd'];
-  dynCall_jiiii = dynCalls['jiiii'] = wasmExports['Ld'];
-  dynCall_fiii = dynCalls['fiii'] = wasmExports['Md'];
-  dynCall_diii = dynCalls['diii'] = wasmExports['Nd'];
-  dynCall_viiiiiii = dynCalls['viiiiiii'] = wasmExports['Od'];
-  dynCall_viiiiiiiiii = dynCalls['viiiiiiiiii'] = wasmExports['Pd'];
-  dynCall_viiiiiiiiiiiiiii = dynCalls['viiiiiiiiiiiiiii'] = wasmExports['Qd'];
-  dynCall_viij = dynCalls['viij'] = wasmExports['Rd'];
-  dynCall_viiiiiiii = dynCalls['viiiiiiii'] = wasmExports['Sd'];
-  dynCall_viji = dynCalls['viji'] = wasmExports['Td'];
-  dynCall_iiiiij = dynCalls['iiiiij'] = wasmExports['Ud'];
-  dynCall_iiiiid = dynCalls['iiiiid'] = wasmExports['Vd'];
-  dynCall_iiiiijj = dynCalls['iiiiijj'] = wasmExports['Wd'];
-  dynCall_iiiiiijj = dynCalls['iiiiiijj'] = wasmExports['Xd'];
-  _asyncify_start_unwind = wasmExports['Yd'];
-  _asyncify_stop_unwind = wasmExports['Zd'];
-  _asyncify_start_rewind = wasmExports['_d'];
-  _asyncify_stop_rewind = wasmExports['$d'];
-  __indirect_function_table = wasmTable = wasmExports['qc'];
+  dynCall_iiiiijiiijjjjjjj = dynCalls['iiiiijiiijjjjjjj'] = wasmExports['Cd'];
+  dynCall_viiiiiiiii = dynCalls['viiiiiiiii'] = wasmExports['Dd'];
+  dynCall_iiiff = dynCalls['iiiff'] = wasmExports['Ed'];
+  dynCall_j = dynCalls['j'] = wasmExports['Fd'];
+  dynCall_vj = dynCalls['vj'] = wasmExports['Gd'];
+  dynCall_viijii = dynCalls['viijii'] = wasmExports['Hd'];
+  dynCall_viijijj = dynCalls['viijijj'] = wasmExports['Id'];
+  dynCall_viiiij = dynCalls['viiiij'] = wasmExports['Jd'];
+  dynCall_viiij = dynCalls['viiij'] = wasmExports['Kd'];
+  dynCall_viiiiiii = dynCalls['viiiiiii'] = wasmExports['Ld'];
+  dynCall_iiid = dynCalls['iiid'] = wasmExports['Md'];
+  dynCall_jiji = dynCalls['jiji'] = wasmExports['Nd'];
+  dynCall_iidiiii = dynCalls['iidiiii'] = wasmExports['Od'];
+  dynCall_jiiii = dynCalls['jiiii'] = wasmExports['Pd'];
+  dynCall_fiii = dynCalls['fiii'] = wasmExports['Qd'];
+  dynCall_diii = dynCalls['diii'] = wasmExports['Rd'];
+  dynCall_viiiiiiiiii = dynCalls['viiiiiiiiii'] = wasmExports['Sd'];
+  dynCall_viiiiiiiiiiiiiii = dynCalls['viiiiiiiiiiiiiii'] = wasmExports['Td'];
+  dynCall_viij = dynCalls['viij'] = wasmExports['Ud'];
+  dynCall_viiiiiiii = dynCalls['viiiiiiii'] = wasmExports['Vd'];
+  dynCall_viji = dynCalls['viji'] = wasmExports['Wd'];
+  dynCall_iiiiij = dynCalls['iiiiij'] = wasmExports['Xd'];
+  dynCall_iiiiid = dynCalls['iiiiid'] = wasmExports['Yd'];
+  dynCall_iiiiijj = dynCalls['iiiiijj'] = wasmExports['Zd'];
+  dynCall_iiiiiijj = dynCalls['iiiiiijj'] = wasmExports['_d'];
+  _asyncify_start_unwind = wasmExports['$d'];
+  _asyncify_stop_unwind = wasmExports['ae'];
+  _asyncify_start_rewind = wasmExports['be'];
+  _asyncify_stop_rewind = wasmExports['ce'];
+  __indirect_function_table = wasmTable = wasmExports['rc'];
 }
 var wasmImports;
 function assignWasmImports() {
   wasmImports = {
-    w: ___cxa_begin_catch,
-    Ha: ___cxa_current_primary_exception,
+    y: ___cxa_begin_catch,
+    Ja: ___cxa_current_primary_exception,
     G: ___cxa_end_catch,
     b: ___cxa_find_matching_catch_2,
-    o: ___cxa_find_matching_catch_3,
-    I: ___cxa_find_matching_catch_4,
-    ba: ___cxa_rethrow,
-    Ga: ___cxa_rethrow_primary_exception,
-    z: ___cxa_throw,
-    Ia: ___cxa_uncaught_exceptions,
-    Pa: ___pthread_create_js,
+    p: ___cxa_find_matching_catch_3,
+    L: ___cxa_find_matching_catch_4,
+    da: ___cxa_rethrow,
+    Ia: ___cxa_rethrow_primary_exception,
+    B: ___cxa_throw,
+    Ka: ___cxa_uncaught_exceptions,
+    Ra: ___pthread_create_js,
     l: ___resumeException,
-    ia: ___syscall_fcntl64,
-    $a: ___syscall_ioctl,
-    ab: ___syscall_openat,
-    gb: __abort_js,
-    Wa: __emscripten_init_main_thread_js,
-    Ka: __emscripten_notify_mailbox_postmessage,
-    Qa: __emscripten_receive_on_main_thread_js,
-    Ca: __emscripten_runtime_keepalive_clear,
-    fa: __emscripten_thread_cleanup,
-    Va: __emscripten_thread_mailbox_await,
-    cb: __emscripten_thread_set_strongref,
-    Ra: __mmap_js,
-    Sa: __munmap_js,
-    Da: __setitimer_js,
-    Ta: __tzset_js,
-    fb: _clock_time_get,
-    ga: _emscripten_check_blocking_allowed,
-    eb: _emscripten_date_now,
-    bb: _emscripten_exit_with_live_runtime,
-    La: _emscripten_get_heap_max,
-    S: _emscripten_get_now,
-    hb: _emscripten_has_asyncify,
-    Ma: _emscripten_num_logical_cores,
-    Ja: _emscripten_resize_heap,
-    lb: _emwgpuAdapterRequestDevice,
-    T: _emwgpuBufferDestroy,
-    la: _emwgpuBufferGetConstMappedRange,
-    nb: _emwgpuBufferMapAsync,
-    ka: _emwgpuBufferUnmap,
-    p: _emwgpuDelete,
-    P: _emwgpuDeviceCreateBuffer,
-    ja: _emwgpuDeviceCreateShaderModule,
-    mb: _emwgpuDeviceDestroy,
-    kb: _emwgpuInstanceRequestAdapter,
-    jb: _emwgpuQueueOnSubmittedWorkDone,
-    ib: _emwgpuWaitAny,
-    Ya: _environ_get,
-    Za: _environ_sizes_get,
-    Oa: _exit,
-    aa: _fd_close,
-    ha: _fd_read,
-    Ua: _fd_seek,
-    _a: _fd_write,
-    db: ggml_webgpu_is_ios_browser,
-    ma: invoke_diii,
-    na: invoke_fiii,
-    F: invoke_i,
-    va: invoke_ifi,
-    f: invoke_ii,
-    ya: invoke_iifff,
-    i: invoke_iii,
-    oa: invoke_iiid,
-    x: invoke_iiif,
-    Bb: invoke_iiiff,
-    ea: invoke_iiiffiiii,
+    la: ___syscall_fcntl64,
+    bb: ___syscall_ioctl,
+    cb: ___syscall_openat,
+    ib: __abort_js,
+    Za: __emscripten_init_main_thread_js,
+    Ma: __emscripten_notify_mailbox_postmessage,
+    Sa: __emscripten_receive_on_main_thread_js,
+    Ea: __emscripten_runtime_keepalive_clear,
+    ia: __emscripten_thread_cleanup,
+    Xa: __emscripten_thread_mailbox_await,
+    fb: __emscripten_thread_set_strongref,
+    Ta: __mmap_js,
+    Ua: __munmap_js,
+    Ga: __setitimer_js,
+    Va: __tzset_js,
+    hb: _clock_time_get,
+    ja: _emscripten_check_blocking_allowed,
+    gb: _emscripten_date_now,
+    db: _emscripten_exit_with_live_runtime,
+    Na: _emscripten_get_heap_max,
+    W: _emscripten_get_now,
+    jb: _emscripten_has_asyncify,
+    Oa: _emscripten_num_logical_cores,
+    La: _emscripten_resize_heap,
+    nb: _emwgpuAdapterRequestDevice,
+    P: _emwgpuBufferDestroy,
+    oa: _emwgpuBufferGetConstMappedRange,
+    pb: _emwgpuBufferMapAsync,
+    na: _emwgpuBufferUnmap,
+    o: _emwgpuDelete,
+    S: _emwgpuDeviceCreateBuffer,
+    ma: _emwgpuDeviceCreateShaderModule,
+    ob: _emwgpuDeviceDestroy,
+    mb: _emwgpuInstanceRequestAdapter,
+    lb: _emwgpuQueueOnSubmittedWorkDone,
+    kb: _emwgpuWaitAny,
+    _a: _environ_get,
+    $a: _environ_sizes_get,
+    Qa: _exit,
+    ca: _fd_close,
+    ka: _fd_read,
+    Wa: _fd_seek,
+    ab: _fd_write,
+    pa: invoke_diii,
+    qa: invoke_fiii,
+    H: invoke_i,
+    wa: invoke_ifi,
+    d: invoke_ii,
+    Aa: invoke_iifff,
+    g: invoke_iii,
+    ra: invoke_iiid,
+    z: invoke_iiif,
+    Cb: invoke_iiiff,
+    ha: invoke_iiiffiiii,
     h: invoke_iiii,
-    ra: invoke_iiiiff,
-    j: invoke_iiiii,
+    ua: invoke_iiiiff,
+    k: invoke_iiiii,
     n: invoke_iiiiii,
-    c: invoke_iiiiiii,
-    H: invoke_iiiiiiii,
-    ta: invoke_iiiiiiiifi,
-    C: invoke_iiiiiiiii,
-    s: invoke_iiiiiiiiiffffffi,
-    v: invoke_iiiiiiiiifi,
-    g: invoke_iiiiiiiiii,
-    E: invoke_iiiiiiiiiiii,
-    xa: invoke_iiiiiiiiiiiiii,
-    O: invoke_iiiiiiiiiiiiiii,
-    u: invoke_iiiiiiiiiiiiiiii,
-    da: invoke_iiiiiiiiiiiiiiiiii,
-    A: invoke_iiiiiiiiiiiijjiifiiiiiii,
-    sa: invoke_iiiiiiji,
-    ca: invoke_iiiiijiiijjjjjjj,
-    X: invoke_iiij,
-    B: invoke_iiijj,
-    q: invoke_iiijjj,
-    D: invoke_iiijjjj,
-    R: invoke_iij,
+    j: invoke_iiiiiii,
+    K: invoke_iiiiiiii,
+    R: invoke_iiiiiiiii,
+    r: invoke_iiiiiiiiiffffffi,
+    fa: invoke_iiiiiiiiifi,
+    f: invoke_iiiiiiiiii,
+    u: invoke_iiiiiiiiiifi,
+    F: invoke_iiiiiiiiiiii,
+    za: invoke_iiiiiiiiiiiiii,
+    Q: invoke_iiiiiiiiiiiiiii,
+    t: invoke_iiiiiiiiiiiiiiii,
+    ga: invoke_iiiiiiiiiiiiiiiiii,
+    C: invoke_iiiiiiiiiiiijjiifiiiiiii,
+    va: invoke_iiiiiiji,
+    ea: invoke_iiiiijiiijjjjjjj,
+    U: invoke_iiij,
+    D: invoke_iiijj,
+    w: invoke_iiijjj,
+    E: invoke_iiijjjj,
+    V: invoke_iij,
     Ab: invoke_j,
     N: invoke_ji,
-    U: invoke_jii,
-    W: invoke_jiiii,
-    d: invoke_v,
-    t: invoke_vi,
+    X: invoke_jii,
+    Z: invoke_jiiii,
+    c: invoke_v,
+    s: invoke_vi,
     m: invoke_vii,
-    xb: invoke_viid,
-    yb: invoke_viif,
-    k: invoke_viii,
-    r: invoke_viiii,
+    yb: invoke_viid,
+    zb: invoke_viif,
+    i: invoke_viii,
+    q: invoke_viiii,
     e: invoke_viiiii,
-    M: invoke_viiiiii,
-    K: invoke_viiiiiii,
-    _: invoke_viiiiiiiii,
-    Q: invoke_viiiiiiiiii,
-    V: invoke_viiiiiiiiiiiiiii,
-    $: invoke_viiiiijjj,
-    L: invoke_viiiij,
-    Y: invoke_viiij,
-    pa: invoke_viijii,
-    qa: invoke_viijijj,
-    wa: invoke_viijj,
+    O: invoke_viiiiii,
+    I: invoke_viiiiiii,
+    aa: invoke_viiiiiiiii,
+    T: invoke_viiiiiiiiii,
+    Y: invoke_viiiiiiiiiiiiiii,
+    ba: invoke_viiiiijjj,
+    x: invoke_viiiiijjjji,
+    M: invoke_viiiij,
+    v: invoke_viiiijjji,
+    _: invoke_viiij,
+    sa: invoke_viijii,
+    ta: invoke_viijijj,
+    xa: invoke_viijj,
     J: invoke_vij,
-    Z: invoke_vj,
-    y: _llvm_eh_typeid_for,
+    $: invoke_vj,
+    A: _llvm_eh_typeid_for,
     a: wasmMemory,
-    Ba: _proc_exit,
-    Fa: _random_get,
-    Ea: _wgpuAdapterGetFeatures,
-    Na: _wgpuAdapterGetInfo,
-    Xa: _wgpuAdapterGetLimits,
-    Aa: _wgpuAdapterHasFeature,
-    Db: _wgpuBufferGetSize,
-    vb: _wgpuCommandEncoderBeginComputePass,
-    ob: _wgpuCommandEncoderCopyBufferToBuffer,
-    qb: _wgpuCommandEncoderFinish,
-    sb: _wgpuComputePassEncoderDispatchWorkgroups,
-    rb: _wgpuComputePassEncoderEnd,
-    tb: _wgpuComputePassEncoderSetBindGroup,
-    ub: _wgpuComputePassEncoderSetPipeline,
-    Cb: _wgpuComputePipelineGetBindGroupLayout,
-    zb: _wgpuDeviceCreateBindGroup,
-    wb: _wgpuDeviceCreateCommandEncoder,
-    za: _wgpuDeviceCreateComputePipeline,
-    pb: _wgpuQueueSubmit,
-    ua: _wgpuQueueWriteBuffer,
+    Da: _proc_exit,
+    Ha: _random_get,
+    Pa: _wgpuAdapterGetFeatures,
+    Ya: _wgpuAdapterGetInfo,
+    eb: _wgpuAdapterGetLimits,
+    Fa: _wgpuAdapterHasFeature,
+    Ba: _wgpuBufferGetSize,
+    xb: _wgpuCommandEncoderBeginComputePass,
+    qb: _wgpuCommandEncoderCopyBufferToBuffer,
+    sb: _wgpuCommandEncoderFinish,
+    ub: _wgpuComputePassEncoderDispatchWorkgroups,
+    tb: _wgpuComputePassEncoderEnd,
+    vb: _wgpuComputePassEncoderSetBindGroup,
+    wb: _wgpuComputePassEncoderSetPipeline,
+    Eb: _wgpuComputePipelineGetBindGroupLayout,
+    Db: _wgpuDeviceCreateBindGroup,
+    Bb: _wgpuDeviceCreateCommandEncoder,
+    Ca: _wgpuDeviceCreateComputePipeline,
+    rb: _wgpuQueueSubmit,
+    ya: _wgpuQueueWriteBuffer,
   };
 }
 function invoke_v(index) {
@@ -6595,10 +6596,41 @@ function invoke_i(index) {
     _setThrew(1, 0);
   }
 }
+function invoke_iiij(index, a1, a2, a3) {
+  var sp = stackSave();
+  try {
+    return dynCall_iiij(index, a1, a2, a3);
+  } catch (e) {
+    stackRestore(sp);
+    if (e !== e + 0) throw e;
+    _setThrew(1, 0);
+  }
+}
+function invoke_ji(index, a1) {
+  var sp = stackSave();
+  try {
+    return dynCall_ji(index, a1);
+  } catch (e) {
+    stackRestore(sp);
+    if (e !== e + 0) throw e;
+    _setThrew(1, 0);
+    return 0n;
+  }
+}
 function invoke_iiiiiiiiii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9) {
   var sp = stackSave();
   try {
     return dynCall_iiiiiiiiii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9);
+  } catch (e) {
+    stackRestore(sp);
+    if (e !== e + 0) throw e;
+    _setThrew(1, 0);
+  }
+}
+function invoke_viiiiijjjji(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) {
+  var sp = stackSave();
+  try {
+    dynCall_viiiiijjjji(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
   } catch (e) {
     stackRestore(sp);
     if (e !== e + 0) throw e;
@@ -6625,6 +6657,16 @@ function invoke_ifi(index, a1, a2) {
     _setThrew(1, 0);
   }
 }
+function invoke_viiiijjji(index, a1, a2, a3, a4, a5, a6, a7, a8) {
+  var sp = stackSave();
+  try {
+    dynCall_viiiijjji(index, a1, a2, a3, a4, a5, a6, a7, a8);
+  } catch (e) {
+    stackRestore(sp);
+    if (e !== e + 0) throw e;
+    _setThrew(1, 0);
+  }
+}
 function invoke_iiijjj(index, a1, a2, a3, a4, a5) {
   var sp = stackSave();
   try {
@@ -6635,10 +6677,36 @@ function invoke_iiijjj(index, a1, a2, a3, a4, a5) {
     _setThrew(1, 0);
   }
 }
-function invoke_iiiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) {
+function invoke_iiiiiiiiiifi(
+  index,
+  a1,
+  a2,
+  a3,
+  a4,
+  a5,
+  a6,
+  a7,
+  a8,
+  a9,
+  a10,
+  a11
+) {
   var sp = stackSave();
   try {
-    return dynCall_iiiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+    return dynCall_iiiiiiiiiifi(
+      index,
+      a1,
+      a2,
+      a3,
+      a4,
+      a5,
+      a6,
+      a7,
+      a8,
+      a9,
+      a10,
+      a11
+    );
   } catch (e) {
     stackRestore(sp);
     if (e !== e + 0) throw e;
@@ -6749,10 +6817,10 @@ function invoke_iiiiiiiiiiiiiiii(
     _setThrew(1, 0);
   }
 }
-function invoke_iiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9) {
+function invoke_iiiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10) {
   var sp = stackSave();
   try {
-    return dynCall_iiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9);
+    return dynCall_iiiiiiiiifi(index, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
   } catch (e) {
     stackRestore(sp);
     if (e !== e + 0) throw e;
@@ -6833,17 +6901,6 @@ function invoke_viiiiiiiii(index, a1, a2, a3, a4, a5, a6, a7, a8, a9) {
     _setThrew(1, 0);
   }
 }
-function invoke_ji(index, a1) {
-  var sp = stackSave();
-  try {
-    return dynCall_ji(index, a1);
-  } catch (e) {
-    stackRestore(sp);
-    if (e !== e + 0) throw e;
-    _setThrew(1, 0);
-    return 0n;
-  }
-}
 function invoke_iiiff(index, a1, a2, a3, a4) {
   var sp = stackSave();
   try {
@@ -6904,10 +6961,10 @@ function invoke_viiij(index, a1, a2, a3, a4) {
     _setThrew(1, 0);
   }
 }
-function invoke_iiij(index, a1, a2, a3) {
+function invoke_viiiiiii(index, a1, a2, a3, a4, a5, a6, a7) {
   var sp = stackSave();
   try {
-    return dynCall_iiij(index, a1, a2, a3);
+    dynCall_viiiiiii(index, a1, a2, a3, a4, a5, a6, a7);
   } catch (e) {
     stackRestore(sp);
     if (e !== e + 0) throw e;
@@ -6960,16 +7017,6 @@ function invoke_diii(index, a1, a2, a3) {
   var sp = stackSave();
   try {
     return dynCall_diii(index, a1, a2, a3);
-  } catch (e) {
-    stackRestore(sp);
-    if (e !== e + 0) throw e;
-    _setThrew(1, 0);
-  }
-}
-function invoke_viiiiiii(index, a1, a2, a3, a4, a5, a6, a7) {
-  var sp = stackSave();
-  try {
-    dynCall_viiiiiii(index, a1, a2, a3, a4, a5, a6, a7);
   } catch (e) {
     stackRestore(sp);
     if (e !== e + 0) throw e;
@@ -7055,13 +7102,13 @@ function applySignatureConversions(wasmExports) {
   var makeWrapper_pp = (f) => (a0) => f(a0) >>> 0;
   var makeWrapper_p = (f) => () => f() >>> 0;
   var makeWrapper_ppp = (f) => (a0, a1) => f(a0, a1) >>> 0;
-  wasmExports['Lb'] = makeWrapper_pp(wasmExports['Lb']);
-  wasmExports['oc'] = makeWrapper_p(wasmExports['oc']);
-  wasmExports['pc'] = makeWrapper_ppp(wasmExports['pc']);
-  wasmExports['yc'] = makeWrapper_ppp(wasmExports['yc']);
-  wasmExports['Dc'] = makeWrapper_pp(wasmExports['Dc']);
-  wasmExports['Ec'] = makeWrapper_p(wasmExports['Ec']);
-  wasmExports['Ic'] = makeWrapper_pp(wasmExports['Ic']);
+  wasmExports['Mb'] = makeWrapper_pp(wasmExports['Mb']);
+  wasmExports['pc'] = makeWrapper_p(wasmExports['pc']);
+  wasmExports['qc'] = makeWrapper_ppp(wasmExports['qc']);
+  wasmExports['zc'] = makeWrapper_ppp(wasmExports['zc']);
+  wasmExports['Ec'] = makeWrapper_pp(wasmExports['Ec']);
+  wasmExports['Fc'] = makeWrapper_p(wasmExports['Fc']);
+  wasmExports['Jc'] = makeWrapper_pp(wasmExports['Jc']);
   return wasmExports;
 }
 function callMain() {

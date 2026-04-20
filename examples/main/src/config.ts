@@ -19,16 +19,16 @@ export const MAX_GGUF_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
 export const LIST_MODELS = [
   {
-    url: 'https://huggingface.co/QuantFactory/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct.Q4_0.gguf',
-    size: 240123904,
+    url: 'https://huggingface.co/QuantFactory/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct.Q4_K_M.gguf',
+    size: 284164096,
   },
   {
-    url: 'https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q4_0.gguf',
-    size: 241574944,
+    url: 'https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-Q4_K_M.gguf',
+    size: 260046848,
   },
   {
-    url: 'https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_0.gguf',
-    size: 269484032,
+    url: 'https://huggingface.co/LiquidAI/LFM2.5-350M-GGUF/resolve/main/LFM2.5-350M-Q4_K_M.gguf',
+    size: 279969792,
   },
   {
     url: 'https://huggingface.co/unsloth/gemma-3-270m-it-GGUF/resolve/main/gemma-3-270m-it-F16.gguf',
@@ -39,20 +39,20 @@ export const LIST_MODELS = [
     size: 639447744,
   },
   {
-    url: 'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/main/LFM2.5-1.2B-Instruct-Q4_0.gguf',
-    size: 695751488,
+    url: 'https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/main/LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
+    size: 766509056,
   },
   {
-    url: 'https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_0.gguf',
-    size: 721918496,
+    url: 'https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf',
+    size: 801112064,
   },
   {
-    url: 'https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_0.gguf',
-    size: 773025824,
+    url: 'https://huggingface.co/unsloth/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
+    size: 872415232,
   },
   {
-    url: 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_0.gguf',
-    size: 1214873856,
+    url: 'https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/main/Qwen3.5-2B-Q4_K_M.gguf',
+    size: 1290000000,
   },
   {
     url: 'https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q2_K.gguf',
@@ -63,16 +63,12 @@ export const LIST_MODELS = [
     size: 1795552544,
   },
   {
-    url: 'https://huggingface.co/unsloth/SmolLM3-3B-128K-GGUF/resolve/main/SmolLM3-3B-128K-Q4_0.gguf',
-    size: 1811456608,
+    url: 'https://huggingface.co/unsloth/SmolLM3-3B-128K-GGUF/resolve/main/SmolLM3-3B-128K-Q4_K_S.gguf',
+    size: 1820000000,
   },
   {
-    url: 'https://huggingface.co/unsloth/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_0.gguf',
-    size: 1921909184,
-  },
-  {
-    url: 'https://huggingface.co/reeselevine/wllama-split-models/resolve/main/gemma-4-E2B-it-Q4_0-00001-of-00005.gguf',
-    size: 3041372064,
+    url: 'https://huggingface.co/reeselevine/wllama-split-models/resolve/main/gemma-4-E2B-it-Q4_K_M-00001-of-00005.gguf',
+    size: 3110000000,
   },
 ];
 
