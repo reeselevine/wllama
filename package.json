@@ -1,6 +1,6 @@
 {
-  "name": "@wllama/wllama",
-  "version": "2.3.7",
+  "name": "@reeselevine/wllama",
+  "version": "3.0.0",
   "description": "WebAssembly binding for llama.cpp - Enabling on-browser LLM inference",
   "main": "index.js",
   "type": "module",
@@ -65,5 +65,8 @@
     "semi": true,
     "singleQuote": true,
     "bracketSameLine": false
+  },
+  "dependencies": {
+    "@reeselevine/wllama": "^3.0.0"
   }
 }

@@ -10,8 +10,8 @@ WebAssembly binding for [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
 For changelog, please visit [releases page](https://github.com/ngxson/wllama/releases)
 
-> [!IMPORTANT]  
-> Version 2.0 is released 👉 [read more](./guides/intro-v2.md)
+> [!IMPORTANT]
+> Version 3.0 is released. This update switches asset paths to the JSPI/ASYNCIFY layout and adds WebGPU support.
 
 ![](./assets/screenshot_0.png)
 
@@ -23,13 +23,13 @@ For changelog, please visit [releases page](https://github.com/ngxson/wllama/rel
 - High-level API: completions, embeddings
 - Low-level API: (de)tokenize, KV cache control, sampling control,...
 - Ability to split the model into smaller files and load them in parallel (same as `split` and `cat`)
-- Auto switch between single-thread and multi-thread build based on browser support
+- Auto switch between JSPI/ASYNCIFY and single-thread/multi-thread builds based on browser support
 - Inference is done inside a worker, does not block UI render
-- Pre-built npm package [@wllama/wllama](https://www.npmjs.com/package/@wllama/wllama)
+- Pre-built npm package [@reeselevine/wllama](https://www.npmjs.com/package/@reeselevine/wllama)
 
 Limitations:
 - To enable multi-thread, you must add `Cross-Origin-Embedder-Policy` and `Cross-Origin-Opener-Policy` headers. See [this discussion](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/106#issuecomment-913450724) for more details.
-- No WebGPU support, but maybe possible in the future
+- WebGPU is supported when available via `preferWebGPU: true`
 - Max file size is 2GB, due to [size restriction of ArrayBuffer](https://stackoverflow.com/questions/17823225/do-arraybuffers-have-a-maximum-length). If your model is bigger than 2GB, please follow the **Split model** section below.
 
 ## Code demo and documentation
@@ -48,13 +48,13 @@ Demo:
 Install it:
 
 ```bash
-npm i @wllama/wllama
+npm i @reeselevine/wllama
 ```
 
 Then, import the module:
 
 ```ts
-import { Wllama } from '@wllama/wllama';
+import { Wllama } from '@reeselevine/wllama';
 let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, ...);
 // (the rest is the same with earlier example)
 ```
@@ -65,7 +65,7 @@ NOTE: this example only covers completions usage. For embeddings, please see [ex
 
 ### Prepare your model
 
-- It is recommended to split the model into **chunks of maximum 512MB**. This will result in slightly faster download speed (because multiple splits can be downloaded in parallel), and also prevent some out-of-memory issues.  
+- It is recommended to split the model into **chunks of maximum 512MB**. This will result in slightly faster download speed (because multiple splits can be downloaded in parallel), and also prevent some out-of-memory issues.
   See the "Split model" section below for more details.
 - It is recommended to use quantized Q4, Q5 or Q6 for balance among performance, file size and quality. Using IQ (with imatrix) is **not** recommended, may result in slow inference and low quality.
 
@@ -78,12 +78,18 @@ import { Wllama } from './esm/index.js';
 
 (async () => {
   const CONFIG_PATHS = {
-    'single-thread/wllama.wasm': './esm/single-thread/wllama.wasm',
-    'multi-thread/wllama.wasm' : './esm/multi-thread/wllama.wasm',
+    'jspi/single-thread/wllama.wasm': './esm/jspi-single-thread/wllama.wasm',
+    'jspi/multi-thread/wllama.wasm': './esm/jspi-multi-thread/wllama.wasm',
+    'asyncify/single-thread/wllama.wasm':
+      './esm/asyncify-single-thread/wllama.wasm',
+    'asyncify/multi-thread/wllama.wasm':
+      './esm/asyncify-multi-thread/wllama.wasm',
   };
-  // Automatically switch between single-thread and multi-thread version based on browser support
-  // If you want to enforce single-thread, add { "n_threads": 1 } to LoadModelConfig
-  const wllama = new Wllama(CONFIG_PATHS);
+  // Wllama will pick the JSPI or ASYNCIFY build automatically based on browser support.
+  // If you want to enforce single-thread, add { n_threads: 1 } to LoadModelConfig.
+  const wllama = new Wllama(CONFIG_PATHS, {
+    preferWebGPU: true,
+  });
   // Define a function for tracking the model download progress
   const progressCallback =  ({ loaded, total }) => {
     // Calculate the progress as a percentage
@@ -115,10 +121,12 @@ import { Wllama } from './esm/index.js';
 Alternatively, you can use the `*.wasm` files from CDN:
 
 ```js
-import WasmFromCDN from '@wllama/wllama/esm/wasm-from-cdn.js';
+import WasmFromCDN from '@reeselevine/wllama/esm/wasm-from-cdn.js';
 const wllama = new Wllama(WasmFromCDN);
 // NOTE: this is not recommended, only use when you can't embed wasm files in your project
 ```
+
+For v3.0+, `WllamaConfig` uses `preferWebGPU?: boolean` instead of the old `backend` field.
 
 ### Split model
 
@@ -154,7 +162,7 @@ When initializing Wllama, you can pass a custom logger to Wllama.
 Example 1: Suppress debug message
 
 ```js
-import { Wllama, LoggerWithoutDebug } from '@wllama/wllama';
+import { Wllama, LoggerWithoutDebug } from '@reeselevine/wllama';
 
 const wllama = new Wllama(pathConfig, {
   // LoggerWithoutDebug is predefined inside wllama

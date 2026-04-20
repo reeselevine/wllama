@@ -50,8 +50,10 @@
     import { Wllama } from '../../esm/index.js';
 
     const CONFIG_PATHS = {
-      'single-thread/wllama.wasm': '../../esm/single-thread/wllama.wasm',
-      'multi-thread/wllama.wasm' : '../../esm/multi-thread/wllama.wasm',
+      'jspi/single-thread/wllama.wasm': '../../esm/jspi-single-thread/wllama.wasm',
+      'jspi/multi-thread/wllama.wasm': '../../esm/jspi-multi-thread/wllama.wasm',
+      'asyncify/single-thread/wllama.wasm': '../../esm/asyncify-single-thread/wllama.wasm',
+      'asyncify/multi-thread/wllama.wasm': '../../esm/asyncify-multi-thread/wllama.wasm',
     };
     const CMPL_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
     const CMPL_MODEL_SIZE = '19MB';

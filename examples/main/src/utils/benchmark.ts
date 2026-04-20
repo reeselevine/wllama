@@ -1,4 +1,4 @@
-import { Wllama } from '@wllama/wllama';
+import { Wllama } from '@reeselevine/wllama';
 import { WLLAMA_CONFIG_PATHS } from '../config';
 import { delay } from './utils';
 

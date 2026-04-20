@@ -5,7 +5,7 @@ import {
   useDidMount,
   WllamaStorage,
 } from './utils';
-import { Model, ModelManager, Wllama } from '@wllama/wllama';
+import { Model, ModelManager, Wllama } from '@reeselevine/wllama';
 import { DEFAULT_INFERENCE_PARAMS, WLLAMA_CONFIG_PATHS } from '../config';
 import { InferenceParams, RuntimeInfo, ModelState, Screen } from './types';
 import { verifyCustomModel } from './custom-models';

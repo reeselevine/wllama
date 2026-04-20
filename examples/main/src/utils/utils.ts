@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { Template } from '@huggingface/jinja';
 import { Message, Screen } from './types';
-import { Wllama } from '@wllama/wllama';
+import { Wllama } from '@reeselevine/wllama';
 import { DEFAULT_CHAT_TEMPLATE } from '../config';
 
 const IOS_WEBGPU_MEMORY_LIMIT = 384 * 1024 * 1024;

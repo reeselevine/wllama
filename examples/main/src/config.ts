@@ -1,9 +1,9 @@
 // See: https://vitejs.dev/guide/assets#explicit-url-imports
-import wllamaJspiSingle from '@wllama/wllama/src/jspi-single-thread/wllama.wasm?url';
-import wllamaJspiMulti from '@wllama/wllama/src/jspi-multi-thread/wllama.wasm?url';
-import wllamaAsyncifySingle from '@wllama/wllama/src/asyncify-single-thread/wllama.wasm?url';
-import wllamaAsyncifyMulti from '@wllama/wllama/src/asyncify-multi-thread/wllama.wasm?url';
-import wllamaPackageJson from '@wllama/wllama/package.json';
+import wllamaJspiSingle from '@reeselevine/wllama/src/jspi-single-thread/wllama.wasm?url';
+import wllamaJspiMulti from '@reeselevine/wllama/src/jspi-multi-thread/wllama.wasm?url';
+import wllamaAsyncifySingle from '@reeselevine/wllama/src/asyncify-single-thread/wllama.wasm?url';
+import wllamaAsyncifyMulti from '@reeselevine/wllama/src/asyncify-multi-thread/wllama.wasm?url';
+import wllamaPackageJson from '@reeselevine/wllama/package.json';
 import { InferenceParams } from './utils/types';
 
 export const WLLAMA_VERSION = wllamaPackageJson.version;

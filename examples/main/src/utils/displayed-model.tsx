@@ -1,4 +1,4 @@
-import { Model } from '@wllama/wllama';
+import { Model } from '@reeselevine/wllama';
 import { ModelState } from './types';
 import { WllamaStorage } from './utils';
 import { LIST_MODELS } from '../config';

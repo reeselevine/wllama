@@ -16,7 +16,7 @@ import {
 import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
 import { DisplayedModel } from '../utils/displayed-model';
-import { isValidGgufFile } from '@wllama/wllama';
+import { isValidGgufFile } from '@reeselevine/wllama';
 
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
 
