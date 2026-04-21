@@ -1,7 +1,10 @@
 import type { Options } from 'tsup';
 
 const baseConfig: Options = {
-  entry: ['./index.ts'],
+  entry: {
+    index: './index.ts',
+    'wasm-from-cdn': './src/wasm-from-cdn.ts',
+  },
   format: ['cjs', 'esm'],
   outDir: 'esm',
   clean: true,
@@ -15,7 +18,7 @@ const baseConfig: Options = {
 const browserConfig: Options = {
   ...baseConfig,
   platform: 'browser',
-  target: 'es2015',
+  target: 'es2020',
   splitting: false,
   outDir: 'esm',
 };

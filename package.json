@@ -1,9 +1,43 @@
 {
   "name": "@reeselevine/wllama",
-  "version": "3.0.0",
+  "version": "3.0.3",
   "description": "WebAssembly binding for llama.cpp - Enabling on-browser LLM inference",
-  "main": "index.js",
+  "main": "./esm/index.cjs",
+  "module": "./esm/index.js",
+  "types": "./esm/index.d.ts",
   "type": "module",
+  "files": [
+    "esm/",
+    "src/jspi-single-thread/wllama.wasm",
+    "src/jspi-multi-thread/wllama.wasm",
+    "src/asyncify-single-thread/wllama.wasm",
+    "src/asyncify-multi-thread/wllama.wasm",
+    "src/wasm-from-package.js",
+    "src/wasm-from-package.d.ts",
+    "README.md",
+    "LICENCE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./esm/index.d.ts",
+      "import": "./esm/index.js",
+      "require": "./esm/index.cjs"
+    },
+    "./esm/wasm-from-cdn.js": {
+      "types": "./esm/wasm-from-cdn.d.ts",
+      "import": "./esm/wasm-from-cdn.js",
+      "require": "./esm/wasm-from-cdn.cjs"
+    },
+    "./esm/wasm-from-package.js": {
+      "types": "./src/wasm-from-package.d.ts",
+      "import": "./src/wasm-from-package.js"
+    },
+    "./src/jspi-single-thread/wllama.wasm": "./src/jspi-single-thread/wllama.wasm",
+    "./src/jspi-multi-thread/wllama.wasm": "./src/jspi-multi-thread/wllama.wasm",
+    "./src/asyncify-single-thread/wllama.wasm": "./src/asyncify-single-thread/wllama.wasm",
+    "./src/asyncify-multi-thread/wllama.wasm": "./src/asyncify-multi-thread/wllama.wasm",
+    "./package.json": "./package.json"
+  },
   "directories": {
     "example": "examples"
   },
@@ -14,7 +48,7 @@
     "build:worker": "./scripts/build_worker.sh",
     "build:glue": "node ./cpp/generate_glue_prototype.js",
     "build:wasm": "./scripts/build_wasm.sh && npm run build:glue",
-    "build:tsup": "tsup src/index.ts --format cjs,esm --clean",
+    "build:tsup": "tsup --config tsup.config.ts",
     "build:minified": "terser esm/index.js -o esm/index.min.js --compress --mangle --source-map",
     "build:typedef": "tsc --emitDeclarationOnly --declaration -p tsconfig.build.json",
     "build": "npm run clean && npm run build:worker && npm run build:tsup && npm run build:minified && npm run build:typedef",
@@ -66,7 +100,5 @@
     "singleQuote": true,
     "bracketSameLine": false
   },
-  "dependencies": {
-    "@reeselevine/wllama": "^3.0.0"
-  }
+  "dependencies": {}
 }

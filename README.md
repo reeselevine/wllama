@@ -55,7 +55,13 @@ Then, import the module:
 
 ```ts
 import { Wllama } from '@reeselevine/wllama';
-let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, ...);
+import WasmFromPackage from '@reeselevine/wllama/esm/wasm-from-package.js';
+
+const WLLAMA_CONFIG_PATHS = WasmFromPackage;
+let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, {
+  preferWebGPU: true,
+  ...
+});
 // (the rest is the same with earlier example)
 ```
 
@@ -118,7 +124,17 @@ import { Wllama } from './esm/index.js';
 })();
 ```
 
-Alternatively, you can use the `*.wasm` files from CDN:
+If you are using the published npm package in a bundler app, you can use the
+bundled `*.wasm` files directly:
+
+```js
+import WasmFromPackage from '@reeselevine/wllama/esm/wasm-from-package.js';
+const wllama = new Wllama(WasmFromPackage, {
+  preferWebGPU: true,
+});
+```
+
+Alternatively, you can load the `*.wasm` files from CDN:
 
 ```js
 import WasmFromCDN from '@reeselevine/wllama/esm/wasm-from-cdn.js';
