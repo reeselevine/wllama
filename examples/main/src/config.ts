@@ -1,5 +1,5 @@
-import WasmFromPackage from '@reeselevine/wllama/esm/wasm-from-package.js';
-import wllamaPackageJson from '@reeselevine/wllama/package.json';
+import WasmFromPackage from '@reeselevine/wllama-webgpu/esm/wasm-from-package.js';
+import wllamaPackageJson from '@reeselevine/wllama-webgpu/package.json';
 import { InferenceParams } from './utils/types';
 
 export const WLLAMA_VERSION = wllamaPackageJson.version;
@@ -69,7 +69,7 @@ export const DEFAULT_INFERENCE_PARAMS: InferenceParams = {
   nPredict: 4096,
   nBatch: 128,
   temperature: 0.2,
-  preferWebGPU: true,
+  backend: 'webgpu',
 };
 
 export const DEFAULT_CHAT_TEMPLATE =

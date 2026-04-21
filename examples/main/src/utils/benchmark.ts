@@ -1,4 +1,4 @@
-import { Wllama } from '@reeselevine/wllama';
+import { Wllama } from '@reeselevine/wllama-webgpu';
 import { WLLAMA_CONFIG_PATHS } from '../config';
 import { delay } from './utils';
 

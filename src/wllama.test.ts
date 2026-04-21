@@ -47,7 +47,7 @@ test.sequential('loads single model file with WebGPU', async () => {
   }
 
   const wllama = new Wllama(CONFIG_PATHS, {
-    preferWebGPU: true,
+    backend: 'webgpu',
   });
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
@@ -72,7 +72,7 @@ test.sequential('generates completion with WebGPU', async () => {
   }
 
   const wllama = new Wllama(CONFIG_PATHS, {
-    preferWebGPU: true,
+    backend: 'webgpu',
   });
 
   await wllama.loadModelFromUrl(TINY_MODEL, {

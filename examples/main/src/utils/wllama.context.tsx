@@ -1,11 +1,12 @@
 import { createContext, useContext, useMemo, useState } from 'react';
 import {
   DebugLogger,
+  getWebGPUMemoryBudget,
   getDefaultScreen,
   useDidMount,
   WllamaStorage,
 } from './utils';
-import { Model, ModelManager, Wllama } from '@reeselevine/wllama';
+import { Model, ModelManager, Wllama } from '@reeselevine/wllama-webgpu';
 import { DEFAULT_INFERENCE_PARAMS, WLLAMA_CONFIG_PATHS } from '../config';
 import { InferenceParams, RuntimeInfo, ModelState, Screen } from './types';
 import { verifyCustomModel } from './custom-models';
@@ -55,15 +56,15 @@ interface WllamaContextValue {
 const WllamaContext = createContext<WllamaContextValue>({} as any);
 
 const modelManager = new ModelManager();
-const newWllamaInstance = (preferWebGPU: boolean) =>
+const newWllamaInstance = (backend: InferenceParams['backend']) =>
   new Wllama(WLLAMA_CONFIG_PATHS, {
     logger: DebugLogger,
-    preferWebGPU,
+    backend,
   });
-let wllamaInstance = newWllamaInstance(DEFAULT_INFERENCE_PARAMS.preferWebGPU);
+let wllamaInstance = newWllamaInstance(DEFAULT_INFERENCE_PARAMS.backend);
 let stopSignal = false;
-const resetWllamaInstance = (preferWebGPU: boolean) => {
-  wllamaInstance = newWllamaInstance(preferWebGPU);
+const resetWllamaInstance = (backend: InferenceParams['backend']) => {
+  wllamaInstance = newWllamaInstance(backend);
 };
 
 export const WllamaProvider = ({ children }: any) => {
@@ -164,6 +165,11 @@ export const WllamaProvider = ({ children }: any) => {
     }
     setLoadedModel(model.clone({ state: ModelState.LOADING }));
     try {
+      if (currParams.backend === 'webgpu' && !(await getWebGPUMemoryBudget())) {
+        throw new Error(
+          'WebGPU backend requested, but WebGPU is not supported'
+        );
+      }
       await wllamaInstance.loadModel(model.cachedModel, {
         n_threads: currParams.nThreads > 0 ? currParams.nThreads : undefined,
         n_ctx: currParams.nContext,
@@ -176,7 +182,7 @@ export const WllamaProvider = ({ children }: any) => {
         hasChatTemplate: !!wllamaInstance.getChatTemplate(),
       });
     } catch (e) {
-      resetWllamaInstance(currParams.preferWebGPU);
+      resetWllamaInstance(currParams.backend);
       alert(`Failed to load model: ${(e as any).message ?? 'Unknown error'}`);
       setLoadedModel(undefined);
     }
@@ -185,7 +191,7 @@ export const WllamaProvider = ({ children }: any) => {
   const unloadModel = async () => {
     if (!loadedModel) return;
     await wllamaInstance.exit();
-    resetWllamaInstance(currParams.preferWebGPU);
+    resetWllamaInstance(currParams.backend);
     setLoadedModel(undefined);
     setCurrRuntimeInfo(undefined);
   };
@@ -229,9 +235,9 @@ export const WllamaProvider = ({ children }: any) => {
   // proxy function for saving to localStorage
   const setParams = (val: InferenceParams) => {
     const next = { ...DEFAULT_INFERENCE_PARAMS, ...val };
-    const gpuPreferenceChanged = currParams.preferWebGPU !== next.preferWebGPU;
-    if (gpuPreferenceChanged && !loadedModel) {
-      resetWllamaInstance(next.preferWebGPU);
+    const backendChanged = currParams.backend !== next.backend;
+    if (backendChanged && !loadedModel) {
+      resetWllamaInstance(next.backend);
     }
     WllamaStorage.save('params', next);
     setCurrParams(next);

@@ -46,6 +46,8 @@ export interface WllamaLogger {
   error: typeof console.error;
 }
 
+export type WllamaBackend = 'cpu' | 'webgpu';
+
 // TODO: bring back useCache
 export interface WllamaConfig {
   /**
@@ -77,9 +79,11 @@ export interface WllamaConfig {
    */
   modelManager?: ModelManager;
   /**
-   * Use the WebGPU backend if available.
+   * Execution backend.
+   *
+   * Default: 'cpu'
    */
-  preferWebGPU?: boolean;
+  backend?: WllamaBackend;
   /**
    * Disable llama.cpp performance metrics.
    *
@@ -575,21 +579,7 @@ export class Wllama {
     if (this.proxy) {
       throw new WllamaError('Module is already initialized', 'load_error');
     }
-    if (this.config.preferWebGPU) {
-      if (navigator.gpu) {
-        if (await navigator.gpu.requestAdapter()) {
-          this.useWebGPU = true;
-        } else {
-          this.logger().warn(
-            'WebGPU backend requested but no adapter found, falling back to CPU'
-          );
-        }
-      } else {
-        this.logger().warn(
-          'WebGPU backend requested but WebGPU is not available, falling back to CPU'
-        );
-      }
-    }
+    this.useWebGPU = this.config.backend === 'webgpu';
 
     // When WebGPU is active and the model comes from the cache (a Model object),
     // we read directly from OPFS in the worker instead of streaming to WASM heap.

@@ -1,4 +1,4 @@
-import { Model } from '@reeselevine/wllama';
+import { Model } from '@reeselevine/wllama-webgpu';
 import { ModelState } from './types';
 import { WllamaStorage } from './utils';
 import { LIST_MODELS } from '../config';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { PerfContextData } from '@reeselevine/wllama';
+import type { PerfContextData } from '@reeselevine/wllama-webgpu';
 import { useMessages } from '../utils/messages.context';
 import { useWllama } from '../utils/wllama.context';
 import { Message, Screen } from '../utils/types';
