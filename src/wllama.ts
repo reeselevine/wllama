@@ -1425,7 +1425,7 @@ export class Wllama {
   async _testBenchmark(
     type: 'tg' | 'pp',
     nSamples: number
-  ): Promise<{ t_ms: number }> {
+  ): Promise<{ success: boolean; message: string; t_ms: number }> {
     this.checkModelLoaded();
     return await this.proxy.wllamaAction<GlueMsgTestBenchmarkRes>(
       'test_benchmark',
@@ -1440,7 +1440,9 @@ export class Wllama {
   /**
    * perplexity function, only used internally
    */
-  async _testPerplexity(tokens: number[]): Promise<{ ppl: number }> {
+  async _testPerplexity(
+    tokens: number[]
+  ): Promise<{ success: boolean; message: string; ppl: number }> {
     this.checkModelLoaded();
     return await this.proxy.wllamaAction<GlueMsgTestPerplexityRes>(
       'test_perplexity',

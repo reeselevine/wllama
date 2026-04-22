@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
 import { DisplayedModel } from '../utils/displayed-model';
 import { isValidGgufFile } from '@reeselevine/wllama-webgpu';
+import { benchmark, perplexity } from '../utils/benchmark';
 
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
 
@@ -55,11 +56,15 @@ export default function ModelScreen() {
   const [webgpuMemoryBudget, setWebgpuMemoryBudget] = useState<
     number | undefined
   >();
+  const [benchmarkBusy, setBenchmarkBusy] = useState(false);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
+  const [benchmarkOutput, setBenchmarkOutput] = useState('');
   const {
     models,
     removeCachedModel,
     isLoadingModel,
     isDownloading,
+    getWllamaInstance,
     loadedModel,
     currParams,
     setParams,
@@ -72,6 +77,8 @@ export default function ModelScreen() {
   });
 
   const blockModelBtn = !!(loadedModel || isDownloading || isLoadingModel);
+  const benchmarkBlocked =
+    benchmarkBusy || isDownloading || isLoadingModel || !loadedModel;
   const effectiveWebGPUMemoryBudget = webgpuMemoryBudget
     ? Math.floor(webgpuMemoryBudget * 0.8)
     : undefined;
@@ -133,6 +140,32 @@ export default function ModelScreen() {
           key === 'nThreads' && defaultValue < 1 ? '' : defaultValue.toString(),
       }));
     };
+
+  const runBenchmarkAction = async (action: 'benchmark' | 'perplexity') => {
+    if (benchmarkBlocked || !loadedModel) return;
+    setBenchmarkBusy(true);
+    setBenchmarkError(null);
+    setBenchmarkOutput('');
+    try {
+      const result =
+        action === 'benchmark'
+          ? await benchmark(
+              getWllamaInstance(),
+              loadedModel.hfModel,
+              currParams
+            )
+          : await perplexity(
+              getWllamaInstance(),
+              loadedModel.hfModel,
+              currParams
+            );
+      setBenchmarkOutput(result.markdown);
+    } catch (e) {
+      setBenchmarkError((e as any)?.message ?? `Failed to run ${action}`);
+    } finally {
+      setBenchmarkBusy(false);
+    }
+  };
 
   return (
     <ScreenWrapper>
@@ -240,6 +273,46 @@ export default function ModelScreen() {
         >
           Clear cache
         </button>
+
+        <div className="mt-6 rounded-box border border-base-300 p-4">
+          <h2 className="text-xl mb-2">Benchmark</h2>
+          <p className="text-sm opacity-80 mb-3">
+            Runs against the currently loaded model. Prefill targets 512 tokens
+            and decode targets 64 tokens, clamped to the loaded context limits.
+            Each test does 1 warmup run and 3 measured runs.
+          </p>
+          {!loadedModel && (
+            <p className="text-sm opacity-80 mb-3">
+              Load a model first to run benchmark or perplexity.
+            </p>
+          )}
+          {benchmarkError && (
+            <div className="alert alert-error mb-3">
+              <span>{benchmarkError}</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={benchmarkBlocked}
+              onClick={() => runBenchmarkAction('benchmark')}
+            >
+              {benchmarkBusy ? 'Running...' : 'Run benchmark'}
+            </button>
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={benchmarkBlocked}
+              onClick={() => runBenchmarkAction('perplexity')}
+            >
+              {benchmarkBusy ? 'Running...' : 'Run perplexity'}
+            </button>
+          </div>
+          {benchmarkOutput && (
+            <pre className="bg-base-200 rounded-box p-3 text-xs overflow-auto whitespace-pre-wrap">
+              {benchmarkOutput}
+            </pre>
+          )}
+        </div>
       </div>
 
       <div className="model-management">
