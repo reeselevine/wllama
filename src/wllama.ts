@@ -4,6 +4,7 @@ import {
   bufToText,
   cbToAsyncIter,
   checkEnvironmentCompatible,
+  isSupportMemory64,
   isString,
   isSupportMultiThread,
   joinBuffers,
@@ -599,10 +600,18 @@ export class Wllama {
 
     // detect if we can use JSPI
     const hasJspi = 'Suspending' in WebAssembly;
+    const hasMemory64 = hasJspi ? await isSupportMemory64() : false;
+    const useJspi = hasJspi && hasMemory64;
     const multiThreadPath = this.pathConfig['asyncify/multi-thread/wllama.wasm'];
-    const singleThreadPath = hasJspi
+    const singleThreadPath = useJspi
       ? this.pathConfig['jspi/single-thread/wllama.wasm']
       : this.pathConfig['asyncify/single-thread/wllama.wasm'];
+
+    if (hasJspi && !hasMemory64) {
+      this.logger().warn(
+        'JSPI is available but Memory64 is not supported, falling back to asyncify single-thread'
+      );
+    }
 
     // detect if we can use multi-thread
     if (await isSupportMultiThread()) {
@@ -644,7 +653,8 @@ export class Wllama {
         }
       : {
           'wllama.wasm': absoluteUrl(singleThreadPath!),
-          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.buildType': useJspi ? 'jspi' : 'asyncify',
+          'wllama.memory64': useJspi,
           'wllama.useWebGPU': this.useWebGPU,
         };
     this.proxy = new ProxyToWorker(

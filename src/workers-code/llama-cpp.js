@@ -14,6 +14,9 @@ let Module = null;
 // send message back to main thread
 const msg = (data, transfer) => postMessage(data, transfer);
 const toUintPtr = (ptr) => ptr >>> 0;
+const isMemory64 = () => !!RUN_OPTIONS.pathConfig['wllama.memory64'];
+const ptrToHeapOffset = (ptr) => (isMemory64() ? Number(ptr) : toUintPtr(ptr));
+const sizeToWasm = (size) => (isMemory64() ? BigInt(size) : size);
 
 // Convert CPP log into JS log
 const cppLogToJSLog = (line) => {
@@ -154,7 +157,8 @@ const patchMEMFS = () => {
     const name = stream.node.name;
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
-      stream.node.contents = m.HEAPU8.subarray(f.ptr, f.ptr + f.size);
+      const heapOffset = ptrToHeapOffset(f.ptr);
+      stream.node.contents = m.HEAPU8.subarray(heapOffset, heapOffset + f.size);
       stream.node.usedBytes = f.size;
     }
   };
@@ -228,7 +232,7 @@ const patchMEMFS = () => {
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
       return {
-        ptr: f.ptr + position,
+        ptr: isMemory64() ? f.ptr + BigInt(position) : f.ptr + position,
         allocated: false,
       };
     } else {
@@ -248,7 +252,7 @@ const heapfsAlloc = (name, size) => {
     throw new Error('File size must be bigger than 0');
   }
   const m = Module;
-  const ptr = toUintPtr(m.mmapAlloc(size));
+  const ptr = m.mmapAlloc(sizeToWasm(size));
   const file = {
     ptr: ptr,
     size: size,
@@ -264,13 +268,14 @@ const heapfsWrite = (id, buffer, offset) => {
   const m = Module;
   if (fsIdToFile[id]) {
     const { ptr, size } = fsIdToFile[id];
+    const heapOffset = ptrToHeapOffset(ptr);
     const afterWriteByte = offset + buffer.byteLength;
     if (afterWriteByte > size) {
       throw new Error(
         `File ID ${id} write out of bound, afterWriteByte = ${afterWriteByte} while size = ${size}`
       );
     }
-    m.HEAPU8.set(buffer, ptr + offset);
+    m.HEAPU8.set(buffer, heapOffset + offset);
     return buffer.byteLength;
   } else {
     throw new Error(`File ID ${id} not found in heapfs`);
@@ -361,12 +366,13 @@ onmessage = async (e) => {
         // init FS
         patchMEMFS();
         // init cwrap
-        const pointer = 'number';
+        const pointer = isMemory64() ? 'bigint' : 'number';
+        const sizeArg = isMemory64() ? 'bigint' : 'number';
         // TODO: note sure why emscripten cannot bind if there is only 1 argument
         wllamaMalloc = callWrapper(
           'wllama_malloc',
           pointer,
-          ['number', pointer],
+          [sizeArg, 'number'],
           false
         );
         wllamaStart = callWrapper('wllama_start', 'string', [], true);
@@ -449,24 +455,28 @@ onmessage = async (e) => {
     const argAction = args[0];
     const argEncodedMsg = args[1];
     try {
-      const inputPtr = toUintPtr(
-        await wllamaMalloc(argEncodedMsg.byteLength, 0)
-      );
+      const inputPtr = await wllamaMalloc(sizeToWasm(argEncodedMsg.byteLength), 0);
+      const inputHeapOffset = ptrToHeapOffset(inputPtr);
       // copy data to wasm heap
       const inputBuffer = new Uint8Array(
         Module.HEAPU8.buffer,
-        inputPtr,
+        inputHeapOffset,
         argEncodedMsg.byteLength
       );
       inputBuffer.set(argEncodedMsg, 0);
-      const outputPtr = toUintPtr(await wllamaAction(argAction, inputPtr));
+      const outputPtr = await wllamaAction(argAction, inputPtr);
       // length of output buffer is written at the first 4 bytes of input buffer
-      const outputLen = new Uint32Array(Module.HEAPU8.buffer, inputPtr, 1)[0];
+      const outputLen = new Uint32Array(
+        Module.HEAPU8.buffer,
+        inputHeapOffset,
+        1
+      )[0];
       // copy the output buffer to JS heap
       const outputBuffer = new Uint8Array(outputLen);
+      const outputHeapOffset = ptrToHeapOffset(outputPtr);
       const outputSrcView = new Uint8Array(
         Module.HEAPU8.buffer,
-        outputPtr,
+        outputHeapOffset,
         outputLen
       );
       outputBuffer.set(outputSrcView, 0); // copy it

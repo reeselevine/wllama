@@ -52,7 +52,7 @@ services:
           cp "$${build_dir}/wllama.wasm" "$${output_dir}"
         }
 
-        build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
+        build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON -DLLAMA_WASM_MEM64=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -sMEMORY64=1"
 
         build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1"
 

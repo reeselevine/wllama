@@ -156,6 +156,23 @@ export const isSupportMultiThread = () =>
   );
 
 /**
+ * @returns true if browser supports wasm memory64 via the JS API
+ */
+export const isSupportMemory64 = async () => {
+  try {
+    const descriptor: any = {
+      initial: 1n,
+      maximum: 1n,
+      address: 'i64',
+    };
+    new WebAssembly.Memory(descriptor);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+/**
  * @returns true if browser support wasm "native" exception handler
  */
 const isSupportExceptions = async () =>
