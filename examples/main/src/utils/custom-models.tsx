@@ -4,7 +4,10 @@ import { WllamaStorage } from './utils';
 
 const ggufMagicNumber = new Uint8Array([0x47, 0x47, 0x55, 0x46]);
 
-export async function verifyCustomModel(url: string): Promise<DisplayedModel> {
+export async function verifyCustomModel(
+  url: string,
+  backend: 'cpu' | 'webgpu'
+): Promise<DisplayedModel> {
   const _url = url.replace(/\?.*/, '');
 
   const response = await fetch(_url, {
@@ -24,7 +27,12 @@ export async function verifyCustomModel(url: string): Promise<DisplayedModel> {
     throw new Error(`Fetch error with status code = ${response.status}`);
   }
 
-  return new DisplayedModel(_url, await getModelSize(_url), true, undefined);
+  return new DisplayedModel(
+    _url,
+    await getModelSize(_url, backend),
+    true,
+    undefined
+  );
 }
 
 const checkBuffer = (buffer: Uint8Array, header: Uint8Array) => {
@@ -36,7 +44,10 @@ const checkBuffer = (buffer: Uint8Array, header: Uint8Array) => {
   return true;
 };
 
-const getModelSize = async (url: string): Promise<number> => {
+const getModelSize = async (
+  url: string,
+  backend: 'cpu' | 'webgpu'
+): Promise<number> => {
   const urls = parseModelUrl(url);
 
   const sizes = await Promise.all(
@@ -58,9 +69,9 @@ const getModelSize = async (url: string): Promise<number> => {
     })
   );
 
-  if (sizes.some((s) => s >= MAX_GGUF_SIZE)) {
+  if (backend !== 'webgpu' && sizes.some((s) => s >= MAX_GGUF_SIZE)) {
     throw new Error(
-      'GGUF file is too big (max. 2GB per file). Please split the file into smaller shards (learn more in "Guide")'
+      'GGUF file is too big (max. 2GB per file unless using WebGPU). Please split the file into smaller shards.'
     );
   }
 

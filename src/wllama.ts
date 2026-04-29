@@ -99,7 +99,6 @@ export interface WllamaChatMessage {
 
 export interface AssetsPathConfig {
   'jspi/single-thread/wllama.wasm'?: string;
-  'jspi/multi-thread/wllama.wasm'?: string;
   'asyncify/single-thread/wllama.wasm'?: string;
   'asyncify/multi-thread/wllama.wasm'?: string;
 }
@@ -536,8 +535,7 @@ export class Wllama {
     const model = useCache
       ? await this.modelManager.getModelOrDownload(url, config)
       : await this.modelManager.downloadModel(url, config);
-    const blobs = await model.open();
-    return await this.loadModel(blobs, config);
+    return await this.loadModel(model, config);
   }
 
   /**
@@ -601,9 +599,7 @@ export class Wllama {
 
     // detect if we can use JSPI
     const hasJspi = 'Suspending' in WebAssembly;
-    const multiThreadPath = hasJspi
-      ? this.pathConfig['jspi/multi-thread/wllama.wasm']
-      : this.pathConfig['asyncify/multi-thread/wllama.wasm'];
+    const multiThreadPath = this.pathConfig['asyncify/multi-thread/wllama.wasm'];
     const singleThreadPath = hasJspi
       ? this.pathConfig['jspi/single-thread/wllama.wasm']
       : this.pathConfig['asyncify/single-thread/wllama.wasm'];
@@ -643,7 +639,7 @@ export class Wllama {
     const mPathConfig = this.useMultiThread
       ? {
           'wllama.wasm': absoluteUrl(multiThreadPath!),
-          'wllama.buildType': hasJspi ? 'jspi' : 'asyncify',
+          'wllama.buildType': 'asyncify',
           'wllama.useWebGPU': this.useWebGPU,
         }
       : {

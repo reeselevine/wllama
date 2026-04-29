@@ -4,8 +4,6 @@
 const WasmFromCDN = {
   'jspi/single-thread/wllama.wasm':
     'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.2/src/jspi-single-thread/wllama.wasm',
-  'jspi/multi-thread/wllama.wasm':
-    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.2/src/jspi-multi-thread/wllama.wasm',
   'asyncify/single-thread/wllama.wasm':
     'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.2/src/asyncify-single-thread/wllama.wasm',
   'asyncify/multi-thread/wllama.wasm':

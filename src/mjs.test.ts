@@ -4,7 +4,6 @@ import { Wllama as WllamaMJSMinified } from '../esm/index.min.js';
 
 const CONFIG_PATHS = {
   'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
-  'jspi/multi-thread/wllama.wasm': '/src/jspi-multi-thread/wllama.wasm',
   'asyncify/single-thread/wllama.wasm':
     '/src/asyncify-single-thread/wllama.wasm',
   'asyncify/multi-thread/wllama.wasm': '/src/asyncify-multi-thread/wllama.wasm',

@@ -83,7 +83,6 @@ import { Wllama } from './esm/index.js';
 (async () => {
   const CONFIG_PATHS = {
     'jspi/single-thread/wllama.wasm': './esm/jspi-single-thread/wllama.wasm',
-    'jspi/multi-thread/wllama.wasm': './esm/jspi-multi-thread/wllama.wasm',
     'asyncify/single-thread/wllama.wasm':
       './esm/asyncify-single-thread/wllama.wasm',
     'asyncify/multi-thread/wllama.wasm':

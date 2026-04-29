@@ -84,9 +84,7 @@ export class ProxyToWorker {
 
     let moduleCode: string;
     if (this.multiThread) {
-      if (isJspi) {
-        moduleCode = workersCode.WLLAMA_JSPI_MULTI_THREAD_CODE;
-      } else if (isAsyncify) {
+      if (isAsyncify) {
         moduleCode = workersCode.WLLAMA_ASYNCIFY_MULTI_THREAD_CODE;
       } else {
         throw new Error(

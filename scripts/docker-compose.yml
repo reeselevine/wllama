@@ -54,8 +54,6 @@ services:
 
         build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action']"
 
-        build_target "JSPI multi-thread" "wasm/jspi-multi-thread" "-DGGML_WEBGPU_JSPI=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
-
         build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1"
 
         build_target "ASYNCIFY multi-thread" "wasm/asyncify-multi-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"

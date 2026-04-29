@@ -247,7 +247,7 @@ export const WllamaProvider = ({ children }: any) => {
   const addCustomModel = async (url: string) => {
     setBusy(true);
     try {
-      const custom = await verifyCustomModel(url);
+      const custom = await verifyCustomModel(url, currParams.backend);
       if (models.some((m) => m.url === custom.url)) {
         throw new Error('Model with the same URL already exist');
       }
