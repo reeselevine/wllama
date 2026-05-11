@@ -602,7 +602,8 @@ export class Wllama {
     const hasJspi = 'Suspending' in WebAssembly;
     const hasMemory64 = hasJspi ? await isSupportMemory64() : false;
     const useJspi = hasJspi && hasMemory64;
-    const multiThreadPath = this.pathConfig['asyncify/multi-thread/wllama.wasm'];
+    const multiThreadPath =
+      this.pathConfig['asyncify/multi-thread/wllama.wasm'];
     const singleThreadPath = useJspi
       ? this.pathConfig['jspi/single-thread/wllama.wasm']
       : this.pathConfig['asyncify/single-thread/wllama.wasm'];

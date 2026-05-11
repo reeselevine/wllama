@@ -455,7 +455,10 @@ onmessage = async (e) => {
     const argAction = args[0];
     const argEncodedMsg = args[1];
     try {
-      const inputPtr = await wllamaMalloc(sizeToWasm(argEncodedMsg.byteLength), 0);
+      const inputPtr = await wllamaMalloc(
+        sizeToWasm(argEncodedMsg.byteLength),
+        0
+      );
       const inputHeapOffset = ptrToHeapOffset(inputPtr);
       // copy data to wasm heap
       const inputBuffer = new Uint8Array(
