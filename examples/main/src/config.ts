@@ -67,7 +67,7 @@ export const DEFAULT_INFERENCE_PARAMS: InferenceParams = {
   nThreads: -1, // auto
   nContext: 4096,
   nPredict: 4096,
-  nBatch: 128,
+  nBatch: 512,
   temperature: 0.2,
   backend: 'webgpu',
 };

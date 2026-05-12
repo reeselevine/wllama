@@ -102,6 +102,11 @@ export class ProxyToWorker {
         );
       }
     }
+    if (!moduleCode) {
+      throw new Error(
+        'Missing embedded worker code for the selected runtime. Rebuild the package with `npm run build:worker` and `npm run build:tsup`.'
+      );
+    }
     let mainModuleCode = moduleCode.replace('var Module', 'var ___Module');
     const runOptions = {
       pathConfig: this.pathConfig,

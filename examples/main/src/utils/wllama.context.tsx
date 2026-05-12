@@ -61,7 +61,17 @@ const newWllamaInstance = (backend: InferenceParams['backend']) =>
     logger: DebugLogger,
     backend,
   });
-let wllamaInstance = newWllamaInstance(DEFAULT_INFERENCE_PARAMS.backend);
+const getInitialParams = (): InferenceParams => {
+  const stored = WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS);
+  return {
+    ...DEFAULT_INFERENCE_PARAMS,
+    ...stored,
+    // nBatch is not user-configurable in the example UI, so keep it aligned
+    // with the current app default instead of reviving stale persisted values.
+    nBatch: DEFAULT_INFERENCE_PARAMS.nBatch,
+  };
+};
+let wllamaInstance = newWllamaInstance(getInitialParams().backend);
 let stopSignal = false;
 const resetWllamaInstance = (backend: InferenceParams['backend']) => {
   wllamaInstance = newWllamaInstance(backend);
@@ -74,10 +84,8 @@ export const WllamaProvider = ({ children }: any) => {
   const [cachedModels, setCachedModels] = useState<Model[]>([]);
   const [isBusy, setBusy] = useState(false);
   const [currRuntimeInfo, setCurrRuntimeInfo] = useState<RuntimeInfo>();
-  const [currParams, setCurrParams] = useState<InferenceParams>({
-    ...DEFAULT_INFERENCE_PARAMS,
-    ...WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS),
-  });
+  const [currParams, setCurrParams] =
+    useState<InferenceParams>(getInitialParams);
   const [downloadingProgress, setDownloadingProgress] = useState<
     Record<DisplayedModel['url'], number>
   >({});

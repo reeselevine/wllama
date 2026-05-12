@@ -19,6 +19,11 @@ import { DisplayedModel } from '../utils/displayed-model';
 import { isValidGgufFile } from '@reeselevine/wllama-webgpu';
 import { benchmark, perplexity } from '../utils/benchmark';
 
+type BenchmarkResultTable = {
+  headers: string[];
+  rows: string[][];
+};
+
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
 
 function parseSplitFile(file: string) {
@@ -58,7 +63,8 @@ export default function ModelScreen() {
   >();
   const [benchmarkBusy, setBenchmarkBusy] = useState(false);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
-  const [benchmarkOutput, setBenchmarkOutput] = useState('');
+  const [benchmarkOutput, setBenchmarkOutput] =
+    useState<BenchmarkResultTable | null>(null);
   const {
     models,
     removeCachedModel,
@@ -145,7 +151,7 @@ export default function ModelScreen() {
     if (benchmarkBlocked || !loadedModel) return;
     setBenchmarkBusy(true);
     setBenchmarkError(null);
-    setBenchmarkOutput('');
+    setBenchmarkOutput(null);
     try {
       const result =
         action === 'benchmark'
@@ -159,7 +165,10 @@ export default function ModelScreen() {
               loadedModel.hfModel,
               currParams
             );
-      setBenchmarkOutput(result.markdown);
+      setBenchmarkOutput({
+        headers: result.output[0],
+        rows: result.output.slice(2),
+      });
     } catch (e) {
       setBenchmarkError((e as any)?.message ?? `Failed to run ${action}`);
     } finally {
@@ -277,9 +286,9 @@ export default function ModelScreen() {
         <div className="mt-6 rounded-box border border-base-300 p-4">
           <h2 className="text-xl mb-2">Benchmark</h2>
           <p className="text-sm opacity-80 mb-3">
-            Runs against the currently loaded model. Prefill targets 512 tokens
-            and decode targets 64 tokens, clamped to the loaded context limits.
-            Each test does 1 warmup run and 3 measured runs.
+            Runs against the currently loaded model. Prefill is run with 512
+            tokens and decode with 64 tokens. Each test does 1 warmup run and 3
+            measured runs.
           </p>
           {!loadedModel && (
             <p className="text-sm opacity-80 mb-3">
@@ -308,9 +317,38 @@ export default function ModelScreen() {
             </button>
           </div>
           {benchmarkOutput && (
-            <pre className="bg-base-200 rounded-box p-3 text-xs overflow-auto whitespace-pre-wrap">
-              {benchmarkOutput}
-            </pre>
+            <div className="rounded-box border border-base-300 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="table table-zebra table-sm">
+                  <thead>
+                    <tr>
+                      {benchmarkOutput.headers.map((header) => (
+                        <th
+                          key={header}
+                          className="font-semibold uppercase text-[11px] tracking-wide"
+                        >
+                          {header}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {benchmarkOutput.rows.map((row, rowIndex) => (
+                      <tr key={`${row[0]}-${rowIndex}`}>
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={`${rowIndex}-${cellIndex}`}
+                            className="whitespace-nowrap"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
       </div>

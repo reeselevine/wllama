@@ -25,6 +25,7 @@ export async function benchmark(
   params: InferenceParams
 ) {
   const loadedContextInfo = wllama.getLoadedContextInfo();
+  const runtimeBackend = wllama.usingWebGPU() ? 'webgpu' : 'cpu';
   const ppSamples = clampSamples(512, loadedContextInfo.n_batch);
   const tgSamples = clampSamples(64, loadedContextInfo.n_ctx);
   const output: any[][] = [
@@ -42,6 +43,8 @@ export async function benchmark(
     for (let runIndex = 0; runIndex < totalRuns; runIndex++) {
       console.log('Running benchmark', {
         modelLabel,
+        requestedBackend: params.backend,
+        runtimeBackend,
         type,
         n_samples: nSamples,
         run: runIndex + 1,
@@ -65,7 +68,7 @@ export async function benchmark(
     const tPlusMinus = Math.abs(Math.max(...results) - Math.min(...results));
     output.push([
       modelLabel,
-      params.backend,
+      runtimeBackend,
       wllama.getNumThreads(),
       `${type} ${nSamples}`,
       `${tAvg.toFixed(2)} ± ${tPlusMinus.toFixed(2)}`,
@@ -83,6 +86,7 @@ export async function perplexity(
   modelLabel: string,
   params: InferenceParams
 ) {
+  const runtimeBackend = wllama.usingWebGPU() ? 'webgpu' : 'cpu';
   const limitTokens = clampSamples(params.nContext, 2048);
   const output: any[][] = [
     ['model', 'backend', 'PPL', 'n_tokens'],
@@ -95,6 +99,8 @@ export async function perplexity(
 
   console.log('Running perplexity', {
     modelLabel,
+    requestedBackend: params.backend,
+    runtimeBackend,
     n_tokens: tokens.length,
   });
   const result = (await wllama._testPerplexity(tokens)) as {
@@ -105,7 +111,7 @@ export async function perplexity(
   if (!result.success) {
     throw new Error(result.message || 'Perplexity failed');
   }
-  output.push([modelLabel, params.backend, result.ppl, tokens.length]);
+  output.push([modelLabel, runtimeBackend, result.ppl, tokens.length]);
 
   console.table(output);
   const markdown = toMarkdownTable(output);

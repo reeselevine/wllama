@@ -17,6 +17,8 @@ const toUintPtr = (ptr) => ptr >>> 0;
 const isMemory64 = () => !!RUN_OPTIONS.pathConfig['wllama.memory64'];
 const ptrToHeapOffset = (ptr) => (isMemory64() ? Number(ptr) : toUintPtr(ptr));
 const sizeToWasm = (size) => (isMemory64() ? BigInt(size) : size);
+const ptrToJsNumber = (value) =>
+  typeof value === 'bigint' ? Number(value) : value;
 
 // Convert CPP log into JS log
 const cppLogToJSLog = (line) => {
@@ -232,7 +234,7 @@ const patchMEMFS = () => {
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
       return {
-        ptr: isMemory64() ? f.ptr + BigInt(position) : f.ptr + position,
+        ptr: ptrToHeapOffset(f.ptr) + ptrToJsNumber(position),
         allocated: false,
       };
     } else {
@@ -252,7 +254,7 @@ const heapfsAlloc = (name, size) => {
     throw new Error('File size must be bigger than 0');
   }
   const m = Module;
-  const ptr = m.mmapAlloc(sizeToWasm(size));
+  const ptr = m.mmapAlloc(ptrToJsNumber(size));
   const file = {
     ptr: ptr,
     size: size,
