@@ -562,19 +562,19 @@ function ModelCard({
 
   const m = model;
   const percent = parseInt(Math.round(m.downloadPercent * 100).toString());
-  const blockedByWebGPU = !!(
+  const exceedsWebGPUBudget = !!(
     backend === 'webgpu' &&
     webgpuMemoryBudget &&
     m.size > webgpuMemoryBudget
   );
-  const blockedActionLabel = blockedByWebGPU
-    ? `Too large for current WebGPU budget (${toHumanReadableSize(webgpuMemoryBudget!)})`
+  const webgpuWarningLabel = exceedsWebGPUBudget
+    ? `Model exceeds the current WebGPU budget (${toHumanReadableSize(webgpuMemoryBudget!)}); loading may fail`
     : undefined;
   return (
     <div
       className={`card bg-base-100 w-full mb-2 ${
         m.state === ModelState.LOADED ? 'border-2 border-primary' : ''
-      } ${blockedByWebGPU ? 'opacity-50 saturate-0' : ''}`}
+      }`}
       key={m.url}
     >
       <div className="card-body p-4 flex flex-row">
@@ -590,10 +590,11 @@ function ModelCard({
               : ''}
           </small>
 
-          {blockedByWebGPU && (
+          {exceedsWebGPUBudget && (
             <div className="text-sm text-warning mt-1">
               <FontAwesomeIcon icon={faWarning} className="mr-2" />
-              Model size exceeds the current WebGPU budget.
+              Model size exceeds the current WebGPU budget and may fail to
+              load.
             </div>
           )}
 
@@ -638,8 +639,8 @@ function ModelCard({
             <button
               className="btn btn-primary btn-sm mr-2"
               onClick={() => downloadModel(m)}
-              disabled={blockModelBtn || blockedByWebGPU}
-              title={blockedActionLabel}
+              disabled={blockModelBtn}
+              title={webgpuWarningLabel}
             >
               Download
             </button>
@@ -649,8 +650,8 @@ function ModelCard({
               <button
                 className="btn btn-primary btn-sm mr-2"
                 onClick={() => loadModel(m)}
-                disabled={blockModelBtn || blockedByWebGPU}
-                title={blockedActionLabel}
+                disabled={blockModelBtn}
+                title={webgpuWarningLabel}
               >
                 Load model
               </button>
