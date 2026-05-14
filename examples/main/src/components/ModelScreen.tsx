@@ -593,8 +593,7 @@ function ModelCard({
           {exceedsWebGPUBudget && (
             <div className="text-sm text-warning mt-1">
               <FontAwesomeIcon icon={faWarning} className="mr-2" />
-              Model size exceeds the current WebGPU budget and may fail to
-              load.
+              Model size exceeds the current WebGPU budget and may fail to load.
             </div>
           )}
 

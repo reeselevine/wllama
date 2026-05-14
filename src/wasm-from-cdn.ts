@@ -3,11 +3,11 @@
 
 const WasmFromCDN = {
   'jspi/single-thread/wllama.wasm':
-    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.5/src/jspi-single-thread/wllama.wasm',
+    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.6/src/jspi-single-thread/wllama.wasm',
   'asyncify/single-thread/wllama.wasm':
-    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.5/src/asyncify-single-thread/wllama.wasm',
+    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.6/src/asyncify-single-thread/wllama.wasm',
   'asyncify/multi-thread/wllama.wasm':
-    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.5/src/asyncify-multi-thread/wllama.wasm',
+    'https://cdn.jsdelivr.net/npm/@reeselevine/wllama-webgpu@1.0.0-alpha.6/src/asyncify-multi-thread/wllama.wasm',
 };
 
 export default WasmFromCDN;
