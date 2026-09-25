@@ -1,11 +1,25 @@
-import { test, expect } from 'vitest';
-import { Wllama, WllamaChatMessage } from './wllama';
+import { test, expect, beforeEach } from 'vitest';
+
+declare const __GITHUB_CI__: boolean;
+
+// Add a small delay before each test on GitHub CI to avoid HuggingFace rate limits.
+// typeof guard handles the case where vitest define is not configured.
+if (typeof __GITHUB_CI__ !== 'undefined' && __GITHUB_CI__) {
+  beforeEach(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+}
+import { Wllama, type WllamaConfig } from './wllama';
 
 const CONFIG_PATHS = {
-  'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
-  'asyncify/single-thread/wllama.wasm':
-    '/src/asyncify-single-thread/wllama.wasm',
-  'asyncify/multi-thread/wllama.wasm': '/src/asyncify-multi-thread/wllama.wasm',
+  default: '/src/wasm/wllama.wasm',
+};
+
+// TODO: enable compat mode in tests once test infrastructure supports Safari/asyncify
+const createWllama = (config = CONFIG_PATHS, options: WllamaConfig = {}) => {
+  const w = new Wllama(config, options);
+  w.setCompat(null);
+  return w;
 };
 
 const TINY_MODEL =
@@ -16,8 +30,11 @@ const SPLIT_MODEL =
 
 const EMBD_MODEL = TINY_MODEL; // for better speed
 
+const RERANK_MODEL =
+  'https://huggingface.co/ggml-org/models/resolve/main/jina-reranker-v1-tiny-en/ggml-model-f16.gguf';
+
 test.sequential('loads single model file', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -35,77 +52,11 @@ test.sequential('loads single model file', async () => {
   await wllama.exit();
 });
 
-test.sequential('loads single model file with WebGPU', async () => {
-  if (!navigator.gpu) {
-    return;
-  }
-
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    return;
-  }
-
-  const wllama = new Wllama(CONFIG_PATHS, {
-    backend: 'webgpu',
-  });
-
-  await wllama.loadModelFromUrl(TINY_MODEL, {
-    n_ctx: 1024,
-  });
-
-  expect(wllama.isModelLoaded()).toBe(true);
-  expect(wllama.usingWebGPU()).toBe(true);
-  expect(wllama.isMultithread()).toBe(false);
-
-  await wllama.exit();
-});
-
-test.sequential('generates completion with WebGPU', async () => {
-  if (!navigator.gpu) {
-    return;
-  }
-
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    return;
-  }
-
-  const wllama = new Wllama(CONFIG_PATHS, {
-    backend: 'webgpu',
-  });
-
-  await wllama.loadModelFromUrl(TINY_MODEL, {
-    n_ctx: 1024,
-  });
-
-  const config = {
-    seed: 42,
-    temp: 0.0,
-    top_p: 0.95,
-    top_k: 40,
-  };
-
-  await wllama.samplingInit(config);
-
-  const completion = await wllama.createCompletion('Once upon a time', {
-    nPredict: 10,
-    sampling: config,
-  });
-
-  expect(wllama.usingWebGPU()).toBe(true);
-  expect(wllama.isMultithread()).toBe(false);
-  expect(completion).toBeDefined();
-  expect(completion.length).toBeGreaterThan(10);
-
-  await wllama.exit();
-});
-
 test.sequential('loads single model file from HF', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromHF(
-    'ggml-org/models',
-    'tinyllamas/stories15M-q4_0.gguf',
+    { repo: 'ggml-org/models', file: 'tinyllamas/stories15M-q4_0.gguf' },
     {
       n_ctx: 1024,
       n_threads: 2,
@@ -117,7 +68,7 @@ test.sequential('loads single model file from HF', async () => {
 });
 
 test.sequential('loads single thread model', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
@@ -127,14 +78,17 @@ test.sequential('loads single thread model', async () => {
   expect(wllama.isModelLoaded()).toBe(true);
   expect(wllama.isMultithread()).toBe(false);
 
-  const completion = await wllama.createCompletion('Hello', { nPredict: 10 });
-  expect(completion).toBeDefined();
-  expect(completion.length).toBeGreaterThan(10);
+  const res = await wllama.createCompletion({
+    prompt: 'Hello',
+    max_tokens: 10,
+  });
+  expect(res).toBeDefined();
+  expect(res.choices[0].text.length).toBeGreaterThan(0);
   await wllama.exit();
 });
 
 test.sequential('loads model with progress callback', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   let progressCalled = false;
   let lastLoaded = 0;
@@ -156,7 +110,7 @@ test.sequential('loads model with progress callback', async () => {
 });
 
 test.sequential('loads split model files', async () => {
-  const wllama = new Wllama(CONFIG_PATHS, {
+  const wllama = createWllama(CONFIG_PATHS, {
     parallelDownloads: 5,
   });
 
@@ -168,101 +122,91 @@ test.sequential('loads split model files', async () => {
   await wllama.exit();
 });
 
-test.sequential('tokenizes and detokenizes text', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
-
-  await wllama.loadModelFromUrl(TINY_MODEL, {
-    n_ctx: 1024,
-  });
-
-  const text =
-    'Once Upon a Time is an American fantasy adventure drama television series';
-  const tokens = await wllama.tokenize(text);
-  expect(tokens.length).toBeGreaterThan(10);
-
-  const detokenized = await wllama.detokenize(tokens);
-  expect(detokenized.byteLength).toBeGreaterThan(10);
-
-  const decodedText = new TextDecoder().decode(detokenized);
-  expect(decodedText.trim()).toBe(text);
-
-  await wllama.exit();
-});
-
-test.sequential('tokenize a long text', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
-
-  await wllama.loadModelFromUrl(TINY_MODEL, {
-    n_ctx: 1024,
-  });
-
-  const text = 'hello '.repeat(1e4);
-  const tokens = await wllama.tokenize(text);
-  expect(tokens.length).toBeGreaterThan(10);
-
-  await wllama.exit();
-});
-
 test.sequential('generates completion', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
   });
 
-  const config = {
-    seed: 42,
-    temp: 0.0,
+  const res = await wllama.createCompletion({
+    prompt: 'Once upon a time',
+    max_tokens: 10,
+    temperature: 0.0,
     top_p: 0.95,
     top_k: 40,
-  };
-
-  await wllama.samplingInit(config);
-
-  const prompt = 'Once upon a time';
-  const completion = await wllama.createCompletion(prompt, {
-    nPredict: 10,
-    sampling: config,
+    seed: 42,
   });
 
-  expect(completion).toBeDefined();
-  expect(completion).toMatch(/(there|little|girl|Lily)+/);
-  expect(completion.length).toBeGreaterThan(10);
+  expect(res).toBeDefined();
+  expect(res.choices[0].text).toMatch(/(there|little|girl|Lily)+/);
+  expect(res.choices[0].text.length).toBeGreaterThan(10);
+
+  await wllama.exit();
+});
+
+test.sequential('generates completions in parallel', async () => {
+  const wllama = createWllama();
+
+  await wllama.loadModelFromUrl(TINY_MODEL, {
+    n_ctx: 1024,
+  });
+
+  // concurrent requests must not interfere with each other (issue #261)
+  const prompts = [
+    'Once upon a time',
+    'The little girl said',
+    'One day, a boy named',
+  ];
+  const results = await Promise.all(
+    prompts.map((prompt) =>
+      wllama.createCompletion({
+        prompt,
+        max_tokens: 10,
+        temperature: 0.0,
+        seed: 42,
+      })
+    )
+  );
+
+  expect(results.length).toBe(prompts.length);
+  for (const res of results) {
+    expect(res).toBeDefined();
+    expect(res.choices[0].text.length).toBeGreaterThan(0);
+  }
 
   await wllama.exit();
 });
 
 test.sequential('abort signal', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
   });
 
-  const config = {
-    seed: 42,
-    temp: 0.0,
+  const abortController = new AbortController();
+  const stream = await wllama.createCompletion({
+    prompt: 'Once upon a time',
+    max_tokens: 10,
+    temperature: 0.0,
     top_p: 0.95,
     top_k: 40,
-  };
-
-  await wllama.samplingInit(config);
-
-  const prompt = 'Once upon a time';
-  const abortController = new AbortController();
-  const stream = await wllama.createCompletion(prompt, {
-    nPredict: 10,
-    sampling: config,
+    seed: 42,
     stream: true,
     abortSignal: abortController.signal,
   });
 
   let i = 0;
-  for await (const _ of stream) {
-    if (i === 2) {
-      abortController.abort();
+  try {
+    for await (const _ of stream) {
+      if (i === 2) {
+        abortController.abort();
+      }
+      i++;
     }
-    i++;
+  } catch (e) {
+    expect((e as Error).name).toBe('AbortError');
   }
 
   expect(i).toBe(4);
@@ -270,27 +214,8 @@ test.sequential('abort signal', async () => {
   await wllama.exit();
 });
 
-test.sequential('gets logits', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
-
-  await wllama.loadModelFromUrl(TINY_MODEL, {
-    n_ctx: 1024,
-  });
-
-  await wllama.samplingInit({});
-
-  const logits = await wllama.getLogits(10);
-  expect(logits.length).toBe(10);
-  expect(logits[0]).toHaveProperty('token');
-  expect(logits[0]).toHaveProperty('p');
-  expect(logits[0].token).toBeGreaterThan(0);
-  // expect(logits[0].p).toBeGreaterThan(0.5); // FIXME
-
-  await wllama.exit();
-});
-
 test.sequential('generates embeddings', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(EMBD_MODEL, {
     n_ctx: 1024,
@@ -300,35 +225,71 @@ test.sequential('generates embeddings', async () => {
   expect(wllama.isModelLoaded()).toBe(true);
 
   const text = 'This is a test sentence';
-  const embedding = await wllama.createEmbedding(text);
+  const res = await wllama.createEmbedding({ input: text });
 
-  expect(embedding).toBeDefined();
+  expect(res).toBeDefined();
+  const embedding = res.data[0].embedding as number[];
   expect(Array.isArray(embedding)).toBe(true);
   expect(embedding.length).toBeGreaterThan(0);
-  expect(typeof embedding[0]).toBe('number');
   for (const e of embedding) {
     expect(typeof e).toBe('number');
-    expect(e).toBeLessThan(1);
   }
 
-  // make sure the vector is normalized
-  const normVec = Math.sqrt(embedding.reduce((acc, v) => acc + v * v, 0));
-  expect(Math.abs(normVec - 1)).toBeLessThan(1e-6);
+  // slightly different text should have high cosine similarity
+  const res2 = await wllama.createEmbedding({ input: text + ' ' });
+  const embedding2 = res2.data[0].embedding as number[];
+  const dot = embedding.reduce((acc, v, i) => acc + v * embedding2[i], 0);
+  const norm1 = Math.sqrt(embedding.reduce((acc, v) => acc + v * v, 0));
+  const norm2 = Math.sqrt(embedding2.reduce((acc, v) => acc + v * v, 0));
+  const cosineSim = dot / (norm1 * norm2);
+  expect(cosineSim).toBeGreaterThan(1 - 0.05);
+  expect(cosineSim).toBeLessThan(1);
 
-  // slightly different text should have different embedding
-  const embedding2 = await wllama.createEmbedding(text + ' ');
-  const cosineDist = embedding.reduce(
-    (acc, v, i) => acc + v * embedding2[i],
-    0
-  );
-  expect(cosineDist).toBeGreaterThan(1 - 0.05);
-  expect(cosineDist).toBeLessThan(1);
+  await wllama.exit();
+});
+
+test.sequential('reranks documents', async () => {
+  const wllama = createWllama();
+
+  await wllama.loadModelFromUrl(RERANK_MODEL, {
+    embeddings: true,
+    pooling_type: 'rank',
+  });
+
+  expect(wllama.isModelLoaded()).toBe(true);
+
+  const query = 'What is machine learning?';
+  const documents = [
+    'Machine learning is a branch of artificial intelligence.',
+    'The weather today is sunny and warm.',
+    'Neural networks are used in deep learning.',
+  ];
+
+  const res = await wllama.createRerank({ query, documents });
+
+  expect(res).toBeDefined();
+  expect(res.results).toHaveLength(documents.length);
+  for (const r of res.results) {
+    expect(typeof r.index).toBe('number');
+    expect(typeof r.relevance_score).toBe('number');
+  }
+
+  // results should be sorted highest score first
+  for (let i = 0; i < res.results.length - 1; i++) {
+    expect(res.results[i].relevance_score).toBeGreaterThanOrEqual(
+      res.results[i + 1].relevance_score
+    );
+  }
+
+  // the most relevant documents should outscore the other
+  const weatherIdx = res.results.findIndex((r) => r.index === 1);
+  expect(weatherIdx).toBeGreaterThan(0);
 
   await wllama.exit();
 });
 
 test.sequential('allowOffline', async () => {
-  const wllama = new Wllama(CONFIG_PATHS, {
+  const wllama = createWllama(CONFIG_PATHS, {
     allowOffline: true,
   });
 
@@ -348,121 +309,116 @@ test.sequential('allowOffline', async () => {
   }
 });
 
-test.sequential('formatChat', async () => {
-  const wllama = new Wllama(CONFIG_PATHS, {
-    allowOffline: true,
-  });
-
-  await wllama.loadModelFromUrl(TINY_MODEL);
-  expect(wllama.isModelLoaded()).toBe(true);
-  const messages: WllamaChatMessage[] = [
-    { role: 'system', content: 'You are helpful.' },
-    { role: 'user', content: 'Hi!' },
-    { role: 'assistant', content: 'Hello!' },
-    { role: 'user', content: 'How are you?' },
-  ];
-
-  const formatted = await wllama.formatChat(messages, false);
-  expect(formatted).toBe(
-    '<|im_start|>system\nYou are helpful.<|im_end|>\n<|im_start|>user\nHi!<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n'
-  );
-
-  const formatted1 = await wllama.formatChat(messages, true);
-  expect(formatted1).toBe(
-    '<|im_start|>system\nYou are helpful.<|im_end|>\n<|im_start|>user\nHi!<|im_end|>\n<|im_start|>assistant\nHello!<|im_end|>\n<|im_start|>user\nHow are you?<|im_end|>\n<|im_start|>assistant\n'
-  );
-
-  const formatted2 = await wllama.formatChat(messages, true, 'zephyr');
-  expect(formatted2).toBe(
-    '<|system|>\nYou are helpful.<|endoftext|>\n<|user|>\nHi!<|endoftext|>\n<|assistant|>\nHello!<|endoftext|>\n<|user|>\nHow are you?<|endoftext|>\n<|assistant|>\n'
-  );
-
-  await wllama.exit();
-});
-
 test.sequential('generates chat completion', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
   });
 
-  const config = {
-    seed: 42,
-    temp: 0.0,
+  const res = await wllama.createChatCompletion({
+    messages: [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Hi!' },
+      { role: 'assistant', content: 'Hello!' },
+      { role: 'user', content: 'How are you?' },
+    ],
+    max_tokens: 10,
+    temperature: 0.0,
     top_p: 0.95,
     top_k: 40,
-  };
-
-  await wllama.samplingInit(config);
-
-  const messages: WllamaChatMessage[] = [
-    { role: 'system', content: 'You are helpful.' },
-    { role: 'user', content: 'Hi!' },
-    { role: 'assistant', content: 'Hello!' },
-    { role: 'user', content: 'How are you?' },
-  ];
-  const completion = await wllama.createChatCompletion(messages, {
-    nPredict: 10,
-    sampling: config,
+    seed: 42,
   });
 
-  expect(completion).toBeDefined();
-  expect(completion).toMatch(/(Sudden|big|scary)+/);
-  expect(completion.length).toBeGreaterThan(10);
+  const text = res.choices[0].message.content as string;
+  expect(text).toBeDefined();
+  expect(text).toMatch(/(Sudden|big|scary)+/);
+  expect(text.length).toBeGreaterThan(10);
 
   await wllama.exit();
 });
 
 test.sequential('generates chat completion using async iterator', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
 
   await wllama.loadModelFromUrl(TINY_MODEL, {
     n_ctx: 1024,
     seed: 42,
   });
 
-  const messages: WllamaChatMessage[] = [
-    { role: 'system', content: 'You are helpful.' },
-    { role: 'user', content: 'Hi!' },
-    { role: 'assistant', content: 'Hello!' },
-    { role: 'user', content: 'How are you?' },
-  ];
-  const stream = await wllama.createChatCompletion(messages, {
-    nPredict: 10,
-    sampling: {
-      temp: 0.0,
-    },
+  const stream = await wllama.createChatCompletion({
+    messages: [
+      { role: 'system', content: 'You are helpful.' },
+      { role: 'user', content: 'Hi!' },
+      { role: 'assistant', content: 'Hello!' },
+      { role: 'user', content: 'How are you?' },
+    ],
+    max_tokens: 10,
+    temperature: 0.0,
     stream: true,
   });
 
-  let finalTokens: number[] = [];
   let finalText = '';
   for await (const chunk of stream) {
     expect(chunk).toBeDefined();
-    expect(chunk.token).toBeGreaterThan(0);
-    expect(chunk.piece).toBeDefined();
-    expect(chunk.piece.length).toBeGreaterThan(0);
-    expect(chunk.currentText).toBeDefined();
-    expect(chunk.currentText.length).toBeGreaterThan(0);
-    finalTokens.push(chunk.token);
-    finalText = chunk.currentText;
+    expect(chunk.object).toBe('chat.completion.chunk');
+    const delta = chunk.choices[0].delta;
+    if (delta.content) {
+      finalText += delta.content;
+    }
   }
 
-  const detokenized = await wllama.detokenize(finalTokens, true);
   expect(finalText.length).toBeGreaterThan(10);
   expect(finalText).toMatch(/(Sudden|big|scary)+/);
-  expect(detokenized).toBe(finalText);
+
+  await wllama.exit();
+});
+
+test.sequential('stack trace (abort)', async () => {
+  const wllama = createWllama();
+  await wllama.loadModelFromUrl(TINY_MODEL, {
+    pooling_type: 'test_stack_trace_abort' as any,
+  });
+  expect(wllama.isModelLoaded()).toBe(true);
+
+  const err1: unknown = await wllama
+    .createCompletion({ prompt: 'test', max_tokens: 1 })
+    .catch((e: unknown) => e);
+  expect(err1).toBeInstanceOf(Error);
+  expect((err1 as Error).name).toBe('RuntimeError');
+  expect((err1 as Error).stack).toMatch(/__wrap_abort/);
+  expect((err1 as Error).stack).toMatch(/server_response::send/);
+
+  await wllama.exit();
+});
+
+// TODO @ngxson : this stucks on github CI but not on local run, investigate why and re-enable
+test.skip('stack trace (OOB memory access)', async () => {
+  const wllama = createWllama();
+  await wllama.loadModelFromUrl(TINY_MODEL, {
+    pooling_type: 'test_stack_trace_oob' as any,
+    n_threads: 1, // multithread stucks on github CI but not on local run, why?
+  });
+  expect(wllama.isModelLoaded()).toBe(true);
+
+  const err2: unknown = await wllama
+    .createCompletion({ prompt: 'test', max_tokens: 1 })
+    .catch((e: unknown) => e);
+  expect(err2).toBeInstanceOf(Error);
+  expect((err2 as Error).name).toBe('RuntimeError');
+  expect((err2 as Error).stack).toMatch(/server_response::send/);
 
   await wllama.exit();
 });
 
 test.sequential('cleans up resources', async () => {
-  const wllama = new Wllama(CONFIG_PATHS);
+  const wllama = createWllama();
   await wllama.loadModelFromUrl(TINY_MODEL);
   expect(wllama.isModelLoaded()).toBe(true);
   await wllama.exit();
-  await expect(wllama.tokenize('test')).rejects.toThrow();
+  await expect(
+    wllama.createCompletion({ prompt: 'test', max_tokens: 1 })
+  ).rejects.toThrow();
 
   // Double check that the model is really unloaded
   expect(wllama.isModelLoaded()).toBe(false);

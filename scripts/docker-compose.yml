@@ -10,6 +10,9 @@ services:
       args:
         EMSDK_IMAGE_TAG: ${EMSDK_IMAGE_TAG}
     user: "${D_UID}:${D_GID}"
+    environment:
+      - WLLAMA_TEST_BACKEND=${WLLAMA_TEST_BACKEND:-}
+      - SKIP_COMPAT=${SKIP_COMPAT:-}
     volumes:
       - ..:/source:Z
     entrypoint: /bin/bash
@@ -19,41 +22,55 @@ services:
         set -e
         cd /source
 
+        mkdir -p build
+        cd build
+        mkdir -p emdawn
+
         DAWN_TAG=v20260317.182325
         EMDAWN_PKG="emdawnwebgpu_pkg-$${DAWN_TAG}.zip"
-        EMDAWNWEBGPU_DIR="/source/emdawnwebgpu_pkg"
+        EMDAWNWEBGPU_DIR="/source/build/emdawn/emdawnwebgpu_pkg"
         echo "Downloading $${EMDAWN_PKG}"
         curl -L -o emdawn.zip \
           "https://github.com/google/dawn/releases/download/$${DAWN_TAG}/$${EMDAWN_PKG}"
-        python3 -c "import zipfile; zf=zipfile.ZipFile('emdawn.zip','r'); zf.extractall('/source'); zf.close()"
+        python3 -c "import zipfile; zf=zipfile.ZipFile('emdawn.zip','r'); zf.extractall('/source/build/emdawn'); zf.close()"
 
-        COMMON_EMCC_FLAGS="--no-entry -O3 -msimd128 -DNDEBUG -flto=full -frtti -sEXPORT_ES6=0 -sMODULARIZE=0 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=4096MB -sALLOW_MEMORY_GROWTH=1 -sFORCE_FILESYSTEM=1 -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc -sNO_EXIT_RUNTIME=1 -Wno-unused-command-line-argument -sIMPORTED_MEMORY"
+        CMAKE_EXTRA_FLAGS="-DWLLAMA_TEST_BACKEND=OFF"
+        if [ -n "${WLLAMA_TEST_BACKEND}" ]; then
+          CMAKE_EXTRA_FLAGS="-DWLLAMA_TEST_BACKEND=ON";
+        fi
 
-        build_target() {
-          local build_name="$1"
-          local build_dir="$2"
-          local cmake_flag="$3"
-          local extra_flags="$4"
-          local emcc_flags="$${COMMON_EMCC_FLAGS} $${extra_flags}"
-          local output_dir="src/$${build_dir#wasm/}"
+        emcmake cmake .. -DGGML_WEBGPU=ON -DGGML_WEBGPU_JSPI=ON -DEMDAWNWEBGPU_DIR="$${EMDAWNWEBGPU_DIR}" $${CMAKE_EXTRA_FLAGS}
+        emmake make wllama -j$$(nproc)
 
-          echo "Building $${build_name}"
-          mkdir -p "$${build_dir}"
-          cd "$${build_dir}"
-          export EMCC_CFLAGS=""
-          emcmake cmake ../.. "$${cmake_flag}" -DEMDAWNWEBGPU_DIR="$${EMDAWNWEBGPU_DIR}"
-          export EMCC_CFLAGS="$${emcc_flags}"
-          emmake make wllama -j
-          cd /source
+        # go back to root
+        cd ..
 
-          echo "$${build_dir}"; ls -lh "$${build_dir}"
-          mkdir -p "$${output_dir}"
-          cp "$${build_dir}/wllama.js" "$${output_dir}"
-          cp "$${build_dir}/wllama.wasm" "$${output_dir}"
-        }
+        # copy output files
+        mkdir -p src/wasm
+        cp build/wllama.js   src/wasm
+        cp build/wllama.wasm src/wasm
 
-        build_target "JSPI single-thread" "wasm/jspi-single-thread" "-DGGML_WEBGPU_JSPI=ON -DLLAMA_WASM_MEM64=ON" "-fwasm-exceptions -sJSPI -sJSPI_EXPORTS=['wllama_start','wllama_action'] -sMEMORY64=1"
+        # build compat package (skip if SKIP_COMPAT=1)
+        if [ -z "${SKIP_COMPAT}" ]; then
+          mkdir -p build-compat
+          cd build-compat
+          emcmake cmake .. -DWLLAMA_COMPAT=ON -DLLAMA_WASM_MEM64=OFF -DGGML_WEBGPU=ON -DGGML_WEBGPU_JSPI=OFF -DEMDAWNWEBGPU_DIR="$${EMDAWNWEBGPU_DIR}" $${CMAKE_EXTRA_FLAGS}
+          emmake make wllama -j$$(nproc)
 
-        build_target "ASYNCIFY single-thread" "wasm/asyncify-single-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1"
+          # go back to root
+          cd ..
 
-        build_target "ASYNCIFY multi-thread" "wasm/asyncify-multi-thread" "-DGGML_WEBGPU_JSPI=OFF" "-fexceptions -sASYNCIFY=1 -pthread -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=Module[\\\"pthreadPoolSize\\\"]"
+          # copy output files (compat build)
+          mkdir -p compat/wasm
+          cp build-compat/wllama.js   compat/wasm
+          cp build-compat/wllama.wasm compat/wasm
+        fi
+
+        # generate source map
+        node scripts/build_source_map.js
+
+        # list files (optional, for verification)
+        ls -lh build
+        if [ -d build-compat ]; then
+          ls -lh build-compat
+        fi

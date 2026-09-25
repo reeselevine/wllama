@@ -3,10 +3,7 @@ import { Wllama as WllamaMJS } from '../esm/index.js';
 import { Wllama as WllamaMJSMinified } from '../esm/index.min.js';
 
 const CONFIG_PATHS = {
-  'jspi/single-thread/wllama.wasm': '/src/jspi-single-thread/wllama.wasm',
-  'asyncify/single-thread/wllama.wasm':
-    '/src/asyncify-single-thread/wllama.wasm',
-  'asyncify/multi-thread/wllama.wasm': '/src/asyncify-multi-thread/wllama.wasm',
+  default: '/src/wasm/wllama.wasm',
 };
 
 const TINY_MODEL =
@@ -17,34 +14,31 @@ const testFunc = async (wllama: WllamaMJS) => {
     n_ctx: 1024,
   });
 
-  const config = {
-    seed: 42,
-    temp: 0.0,
+  const res = await wllama.createCompletion({
+    prompt: 'Once upon a time',
+    max_tokens: 10,
+    temperature: 0.0,
     top_p: 0.95,
     top_k: 40,
-  };
-
-  await wllama.samplingInit(config);
-
-  const prompt = 'Once upon a time';
-  const completion = await wllama.createCompletion(prompt, {
-    nPredict: 10,
-    sampling: config,
+    seed: 42,
   });
 
-  expect(completion).toBeDefined();
-  expect(completion).toMatch(/(there|little|girl|Lily)+/);
-  expect(completion.length).toBeGreaterThan(10);
+  expect(res).toBeDefined();
+  expect(res.choices[0].text).toMatch(/(there|little|girl|Lily)+/);
+  expect(res.choices[0].text.length).toBeGreaterThan(10);
 
   await wllama.exit();
 };
 
+// TODO: enable compat mode in tests once test infrastructure supports Safari/asyncify
 test.sequential('(mjs) generates completion', async () => {
   const wllama = new WllamaMJS(CONFIG_PATHS);
+  wllama.setCompat(null);
   await testFunc(wllama);
 });
 
 test.sequential('(mjs/minified) generates completion', async () => {
   const wllama = new WllamaMJSMinified(CONFIG_PATHS);
+  wllama.setCompat(null);
   await testFunc(wllama as unknown as WllamaMJS);
 });

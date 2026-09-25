@@ -50,9 +50,7 @@
     import { Wllama } from '../../esm/index.js';
 
     const CONFIG_PATHS = {
-      'jspi/single-thread/wllama.wasm': '../../esm/jspi-single-thread/wllama.wasm',
-      'asyncify/single-thread/wllama.wasm': '../../esm/asyncify-single-thread/wllama.wasm',
-      'asyncify/multi-thread/wllama.wasm': '../../esm/asyncify-multi-thread/wllama.wasm',
+      default: '../../esm/wasm/wllama.wasm',
     };
     const CMPL_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
     const CMPL_MODEL_SIZE = '19MB';
@@ -89,6 +87,17 @@
     async function startCompletions(modelUrl, files) {
       const wllama = new Wllama(CONFIG_PATHS);
       // await wllama.cacheManager.clear();
+
+      // note: this is optional
+      if (window.location.href.match(/localhost|127\.0\.0\.1/)) {
+        wllama.setCompat({
+          wasm: '../../compat/wasm/wllama.wasm',
+          worker: '../../compat/wasm/wllama.js',
+        });
+      } else {
+        wllama.setCompat('default');
+      }
+
       if (files) {
         await wllama.loadModel(files);
       } else {
@@ -98,17 +107,25 @@
 
       elemBtnCompletions.onclick = async () => {
         setCmplDisable(true);
-        await wllama.createCompletion(elemInput.value, {
-          nPredict: parseInt(elemNPredict.value),
-          sampling: {
-            temp: 0.5,
+        elemOutputCmpl.textContent = '';
+        try {
+          await wllama.createCompletion({
+            prompt: elemInput.value,
+            max_tokens: parseInt(elemNPredict.value),
+            temperature: 0.5,
             top_k: 40,
             top_p: 0.9,
-          },
-          onNewToken: (token, piece, currentText) => {
-            elemOutputCmpl.textContent = currentText;
-          },
-        });
+            stream: true,
+            onData: (chunk) => {
+              const txt = chunk.choices[0].text;
+              elemOutputCmpl.textContent += txt;
+            },
+          });
+        } catch (ex) {
+          console.error(ex);
+          console.error(ex.stack);
+          alert('Error: ' + ex.message);
+        }
         setCmplDisable(false);
       };
     }
@@ -131,10 +148,12 @@
 
       elemBtnEmbeddings.onclick = async () => {
         setEmbdDisable(true);
-        const embdA = await wllama1.createEmbedding(elemInputA.value);
+        let embdA = await wllama1.createEmbedding({ input: elemInputA.value });
         console.log({embdA});
-        const embdB = await wllama1.createEmbedding(elemInputB.value);
+        embdA = embdA.data[0].embedding; // OAI-compat response
+        let embdB = await wllama1.createEmbedding({ input: elemInputB.value });
         console.log({embdB});
+        embdB = embdB.data[0].embedding; // OAI-compat response
         // since embeddings are normalized, we don't need to calculate norm
         const dotProd = embdA.reduce((acc, _, i) => acc + embdA[i]*embdB[i], 0);
         elemOutputEmbd.textContent = dotProd;

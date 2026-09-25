@@ -1,16 +1,27 @@
 node_modules
 .DS_Store
 .vscode
+.claude
+.npmrc
 /cache
 /build
+/build-*
 /docs
 /dist
 /wasm
 /esm
 /models
+/tmp
+/test-results
 _tmp
 
 /scripts/_tmp_hf_space
 /cpp/test_glue
 /cpp/*.bin
 tmp.patch
+
+a.out.js
+a.out.wasm
+
+/compat/wasm/*.wasm
+/src/wasm/*.wasm

@@ -1,6 +1,7 @@
+import { getHFFileSHA256 } from './huggingface';
 import type { DownloadProgressCallback } from './model-manager';
-import { createWorker, isSafariMobile } from './utils';
-import { OPFS_UTILS_WORKER_CODE } from './workers-code/generated';
+import { COSBackend } from './storage/cos';
+import type { StorageBackend, StorageFileHint } from './storage/index';
 
 const PREFIX_METADATA = '__metadata__';
 
@@ -9,6 +10,10 @@ export type DownloadOptions = {
    * Callback function to track download progress
    */
   progressCallback?: DownloadProgressCallback;
+  /**
+   * Additional metadata to be stored with the downloaded file
+   */
+  metadataAdditional?: Record<string, any>;
   /**
    * Custom headers for the request. Useful for authentication (e.g. Bearer token)
    */
@@ -24,7 +29,7 @@ export const POLYFILL_ETAG = 'polyfill_for_older_version';
 
 export interface CacheEntry {
   /**
-   * File name in OPFS, in the format: `${hashSHA1(fullURL)}_${fileName}`
+   * Storage key for this file, in the format: `${hashSHA1(fullURL)}_${fileName}`
    */
   name: string;
   /**
@@ -51,21 +56,52 @@ export interface CacheEntryMetadata {
    * Original URL of the remote model. Unused for now
    */
   originalURL: string;
+  /**
+   * URL to mmproj file, if exists
+   */
+  mmprojURL?: string | undefined;
+  /**
+   * Optional SHA256, mostly used by COS backend
+   */
+  sha256?: string | undefined;
+}
+
+function hintFromMetadata(
+  metadata: CacheEntryMetadata | null
+): StorageFileHint | undefined {
+  if (!metadata) return undefined;
+  if (metadata.sha256) return { sha256: metadata.sha256 };
+  return undefined;
 }
 
 /**
- * Cache implementation using OPFS (Origin private file system)
+ * Manages cached model files, backed by a pluggable StorageBackend.
  *
- * This class is also responsible for downloading files from the internet.
+ * Defaults to OPFS (Origin Private File System).
  */
-class CacheManager {
+export class CacheManager {
+  private sb: StorageBackend;
+
   /**
-   * Convert a given URL into file name in cache.
+   * @param backends Array of storage backends to use, in order of preference ; if first is available, use it, otherwise try the next one.
+   */
+  constructor(backends: StorageBackend[] = [new COSBackend()]) {
+    for (const backend of backends) {
+      if (backend.isSupported()) {
+        this.sb = backend;
+        return;
+      }
+    }
+    throw new Error('No supported storage backend found');
+  }
+
+  /**
+   * Convert a given URL into a storage key.
    *
-   * Format of the file name: `${hashSHA1(fullURL)}_${fileName}`
+   * Format: `${hashSHA1(fullURL)}_${fileName}`
    */
   async getNameFromURL(url: string): Promise<string> {
-    return await urlToFileName(url, '');
+    return urlToFileName(url, '');
   }
 
   /**
@@ -80,49 +116,109 @@ class CacheManager {
     stream: ReadableStream,
     metadata: CacheEntryMetadata
   ): Promise<void> {
-    this.writeMetadata(name, metadata); // no need await
-    return await opfsWrite(name, stream);
+    // write file first, then metadata
+    await this.sb.write(name, stream);
+    await this.writeMetadata(name, metadata);
   }
 
   async download(url: string, options: DownloadOptions = {}): Promise<void> {
-    const worker = createWorker(OPFS_UTILS_WORKER_CODE);
-    let aborted = false;
-    if (options.signal) {
-      aborted = options.signal.aborted;
-      const mSignal = options.signal;
-      mSignal.addEventListener('abort', () => {
-        aborted = true;
-        worker.postMessage({ action: 'download-abort' });
+    const fileKey = await urlToFileName(url, '');
+
+    // Fetch sha256 before the GET so we can skip the download entirely if the
+    // file is already in COS (avoids opening a connection just to cancel it).
+    const sha256 = await getHFFileSHA256(url, options.headers ?? {});
+    const hint = sha256 ? { sha256 } : undefined;
+
+    const cachedSize = await this.sb.getSize(fileKey, hint);
+    if (cachedSize !== -1) {
+      const metadata = await this.readMetadata(fileKey);
+      if (
+        metadata?.originalURL === url &&
+        metadata.originalSize === cachedSize
+      ) {
+        return;
+      }
+      // no metadata, file maybe partial; ask server for the real size
+      const head = await fetch(url, {
+        method: 'HEAD',
+        ...(options.headers ? { headers: options.headers } : {}),
       });
-      delete options.signal;
+      const originalSize = parseInt(
+        head.headers.get('content-length') ?? '0',
+        10
+      );
+      const etag = (head.headers.get('etag') || '').replace(
+        /[^A-Za-z0-9]/g,
+        ''
+      );
+      if (originalSize > 0 && originalSize === cachedSize) {
+        await this.writeMetadata(fileKey, {
+          originalURL: url,
+          originalSize,
+          etag,
+          sha256,
+          ...(options.metadataAdditional ?? {}),
+        });
+        return;
+      }
+      // size mismatch, drop the file and download it again
+      await this.sb.delete(fileKey);
+      await this.sb.delete(`${PREFIX_METADATA}${fileKey}`);
     }
-    const metadataFileName: string = await urlToFileName(url, PREFIX_METADATA);
-    const filename: string = await urlToFileName(url, '');
-    return await new Promise((resolve, reject) => {
-      worker.postMessage({
-        action: 'download',
-        url,
-        filename,
-        metadataFileName,
-        options: { headers: options.headers, aborted },
-      });
-      worker.onmessage = (e: MessageEvent<any>) => {
-        if (e.data.ok) {
-          worker.terminate();
-          resolve();
-        } else if (e.data.err) {
-          worker.terminate();
-          reject(e.data.err);
-        } else if (e.data.progress) {
-          const progress: { loaded: number; total: number } = e.data.progress;
-          options.progressCallback?.(progress);
-        } else {
-          // should never happen
-          reject(new Error('Unknown message from worker'));
-          console.error('Unknown message from worker', e.data);
-        }
-      };
+
+    const response = await fetch(url, {
+      ...(options.headers ? { headers: options.headers } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
     });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to fetch ${url}: HTTP ${response.status}`);
+    }
+
+    const contentLength = response.headers.get('content-length');
+    const etag = (response.headers.get('etag') || '').replace(
+      /[^A-Za-z0-9]/g,
+      ''
+    );
+    const total = parseInt(contentLength ?? '0', 10);
+
+    const progressCallback = options.progressCallback;
+    let loaded = 0;
+    let lastProgressAt = 0;
+
+    const progressStream = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        loaded += chunk.byteLength;
+        if (progressCallback) {
+          const now = Date.now();
+          if (now - lastProgressAt > 100) {
+            lastProgressAt = now;
+            progressCallback({ loaded, total });
+          }
+        }
+        controller.enqueue(chunk);
+      },
+      flush() {
+        progressCallback?.({ loaded, total: total || loaded });
+      },
+    });
+
+    const metadata: CacheEntryMetadata = {
+      originalURL: url,
+      originalSize: total,
+      etag,
+      ...(options.metadataAdditional ?? {}),
+    };
+    if (sha256) {
+      metadata.sha256 = sha256;
+    }
+
+    await this.sb.write(
+      fileKey,
+      response.body.pipeThrough(progressStream),
+      hint
+    );
+    await this.writeMetadata(fileKey, metadata);
   }
 
   /**
@@ -132,7 +228,13 @@ class CacheManager {
    * @returns Blob, or null if file does not exist
    */
   async open(nameOrURL: string): Promise<Blob | null> {
-    return await opfsOpen(nameOrURL);
+    const hint1 = hintFromMetadata(await this.getMetadata(nameOrURL));
+    const direct = await this.sb.read(nameOrURL, hint1);
+    if (direct) return direct;
+    // also accept the original URL
+    const key = await urlToFileName(nameOrURL, '');
+    const hint2 = hintFromMetadata(await this.getMetadata(key));
+    return this.sb.read(key, hint2);
   }
 
   /**
@@ -144,31 +246,38 @@ class CacheManager {
    * @returns number of bytes, or -1 if file does not exist
    */
   async getSize(name: string): Promise<number> {
-    return await opfsFileSize(name);
+    const hint = hintFromMetadata(await this.getMetadata(name));
+    return this.sb.getSize(name, hint);
   }
 
   /**
    * Get metadata of a cached file
    */
   async getMetadata(name: string): Promise<CacheEntryMetadata | null> {
-    const stream = await opfsOpen(name, PREFIX_METADATA);
-    const cachedSize = await this.getSize(name);
-    if (!stream) {
-      return cachedSize > 0
-        ? // files created by older version of wllama doesn't have metadata, we will try to polyfill it
-          {
-            etag: POLYFILL_ETAG,
-            originalSize: cachedSize,
-            originalURL: '',
-          }
-        : // if cached file not found, we don't have metadata at all
-          null;
-    }
+    const metadata = await this.readMetadata(name);
+    if (metadata) return metadata;
+    const cachedSize = await this.sb.getSize(name);
+    return cachedSize > 0
+      ? // files created by older version of wllama don't have metadata; polyfill it
+        {
+          etag: POLYFILL_ETAG,
+          originalSize: cachedSize,
+          originalURL: '',
+        }
+      : // cached file not found
+        null;
+  }
+
+  /**
+   * Same as `getMetadata()`, but without polyfill. Returns null if the file has no metadata.
+   */
+  private async readMetadata(name: string): Promise<CacheEntryMetadata | null> {
+    const blob = await this.sb.read(`${PREFIX_METADATA}${name}`);
+    if (!blob) return null;
     try {
-      const meta = await new Response(stream).json();
-      return meta;
+      return await new Response(blob).json();
     } catch (e) {
-      // worst case: metadata is somehow corrupted, we will re-download the model
+      // metadata corrupted; caller will re-download
       return null;
     }
   }
@@ -177,31 +286,27 @@ class CacheManager {
    * List all files currently in cache
    */
   async list(): Promise<CacheEntry[]> {
-    const cacheDir = await getCacheDir();
-    const result: CacheEntry[] = [];
+    const all = await this.sb.list();
     const metadataMap: Record<string, CacheEntryMetadata> = {};
-    // @ts-ignore
-    for await (let [name, handler] of cacheDir.entries()) {
-      if (handler.kind === 'file' && name.startsWith(PREFIX_METADATA)) {
-        const stream = (
-          await (handler as FileSystemFileHandle).getFile()
-        ).stream();
-        const meta = await new Response(stream).json().catch((_) => null);
-        metadataMap[name.replace(PREFIX_METADATA, '')] = meta;
+
+    for (const { key } of all) {
+      if (key.startsWith(PREFIX_METADATA)) {
+        const blob = await this.sb.read(key);
+        if (blob) {
+          const meta = await new Response(blob).json().catch(() => null);
+          metadataMap[key.slice(PREFIX_METADATA.length)] = meta;
+        }
       }
     }
-    // @ts-ignore
-    for await (let [name, handler] of cacheDir.entries()) {
-      if (handler.kind === 'file' && !name.startsWith(PREFIX_METADATA)) {
+
+    const result: CacheEntry[] = [];
+    for (const { key, size } of all) {
+      if (!key.startsWith(PREFIX_METADATA)) {
         result.push({
-          name,
-          size: await (handler as FileSystemFileHandle)
-            .getFile()
-            .then((f) => f.size),
-          metadata: metadataMap[name] || {
-            // try to polyfill for old versions
-            originalSize: (await (handler as FileSystemFileHandle).getFile())
-              .size,
+          name: key,
+          size,
+          metadata: metadataMap[key] || {
+            originalSize: size,
             originalURL: '',
             etag: '',
           },
@@ -236,104 +341,30 @@ class CacheManager {
    * @param predicate A predicate like `array.filter(item => boolean)`
    */
   async deleteMany(predicate: (e: CacheEntry) => boolean): Promise<void> {
-    const cacheDir = await getCacheDir();
     const list = await this.list();
     for (const item of list) {
       if (predicate(item)) {
-        await cacheDir.removeEntry(item.name);
-        await cacheDir
-          .removeEntry(`${PREFIX_METADATA}${item.name}`)
-          .catch(() => {});
+        await this.sb.delete(item.name);
+        await this.sb.delete(`${PREFIX_METADATA}${item.name}`);
       }
     }
   }
 
   /**
    * Write the metadata of the file to disk.
-   *
-   * This function is separated from `write()` for compatibility reason. In older version of wllama, there was no metadata for cached file, so when newer version of wllama loads a file created by older version, it will try to polyfill the metadata.
    */
   async writeMetadata(
     name: string,
     metadata: CacheEntryMetadata
   ): Promise<void> {
     const blob = new Blob([JSON.stringify(metadata)], { type: 'text/plain' });
-    await opfsWrite(name, blob.stream(), PREFIX_METADATA);
+    await this.sb.write(`${PREFIX_METADATA}${name}`, blob.stream());
   }
 }
 
 export default CacheManager;
 
-/**
- * Write to OPFS file from ReadableStream
- */
-async function opfsWrite(
-  key: string,
-  stream: ReadableStream,
-  prefix = ''
-): Promise<void> {
-  try {
-    const fileName = await urlToFileName(key, prefix);
-    const writable = await opfsWriteViaWorker(fileName);
-    await writable.truncate(0); // clear file content
-    const reader = stream.getReader();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      await writable.write(value);
-    }
-    await writable.close();
-  } catch (e) {
-    console.error('opfsWrite', e);
-  }
-}
-
-/**
- * Opens a file in OPFS for reading
- * @returns ReadableStream
- */
-async function opfsOpen(
-  originalURLOrName: string,
-  prefix = ''
-): Promise<File | null> {
-  const getFileHandler = async (fname: string) => {
-    try {
-      const cacheDir = await getCacheDir();
-      const fileHandler = await cacheDir.getFileHandle(fname);
-      return await fileHandler.getFile();
-    } catch (e) {
-      // TODO: check if exception is NotFoundError
-      return null;
-    }
-  };
-  let handler = await getFileHandler(originalURLOrName);
-  if (handler) {
-    return handler;
-  }
-  // retry if needed
-  const fileName = await urlToFileName(originalURLOrName, prefix);
-  handler = await getFileHandler(fileName);
-  return handler;
-}
-
-/**
- * Get file size of a file in OPFS
- * @returns number of bytes, or -1 if file does not exist
- */
-async function opfsFileSize(originalURL: string, prefix = ''): Promise<number> {
-  try {
-    const cacheDir = await getCacheDir();
-    const fileName = await urlToFileName(originalURL, prefix);
-    const fileHandler = await cacheDir.getFileHandle(fileName);
-    const file = await fileHandler.getFile();
-    return file.size;
-  } catch (e) {
-    // TODO: check if exception is NotFoundError
-    return -1;
-  }
-}
-
-async function urlToFileName(url: string, prefix: string) {
+async function urlToFileName(url: string, prefix: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest(
     'SHA-1',
     new TextEncoder().encode(url)
@@ -343,53 +374,4 @@ async function urlToFileName(url: string, prefix: string) {
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
   return `${prefix}${hashHex}_${url.split('/').pop()}`;
-}
-
-async function getCacheDir() {
-  const opfsRoot = await navigator.storage.getDirectory();
-  const cacheDir = await opfsRoot.getDirectoryHandle('cache', { create: true });
-  return cacheDir;
-}
-
-async function opfsWriteViaWorker(fileName: string): Promise<{
-  truncate(offset: number): Promise<void>;
-  write(value: Uint8Array): Promise<void>;
-  close(): Promise<void>;
-}> {
-  const worker = createWorker(OPFS_UTILS_WORKER_CODE);
-  let pResolve: (v: any) => void;
-  let pReject: (v: any) => void;
-  worker.onmessage = (e: MessageEvent<any>) => {
-    if (e.data.ok) pResolve(null);
-    else if (e.data.err) pReject(e.data.err);
-  };
-  const workerExec = (data: {
-    open?: string;
-    value?: Uint8Array;
-    done?: boolean;
-  }) =>
-    new Promise<void>((resolve, reject) => {
-      pResolve = resolve;
-      pReject = reject;
-      // TODO @ngxson : Safari mobile doesn't support transferable ArrayBuffer
-      worker.postMessage(
-        data,
-        isSafariMobile()
-          ? undefined
-          : {
-              transfer: data.value ? [data.value.buffer] : [],
-            }
-      );
-    });
-  await workerExec({ open: fileName });
-  return {
-    truncate: async () => {
-      /* noop */
-    },
-    write: (value) => workerExec({ value }),
-    close: async () => {
-      await workerExec({ done: true });
-      worker.terminate();
-    },
-  };
 }

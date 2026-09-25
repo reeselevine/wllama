@@ -2,29 +2,36 @@
 
 ![](./README_banner.png)
 
-WebAssembly + WebGPU bindings for [llama.cpp](https://github.com/ggerganov/llama.cpp)
+WebAssembly binding for [llama.cpp](https://github.com/ggerganov/llama.cpp)
 
-Maintained by Reese Levine as a fork of the original `wllama` project by
-Xuan Son Nguyen: https://github.com/ngxson/wllama
+👉 [Try the demo app](https://huggingface.co/spaces/ngxson/wllama)
 
-👉 [Try the demo app](https://reeselevine.github.io/wllama)
+👉 See the [blog post](https://reeselevine.github.io/llamas-on-the-web/) introducing WebGPU support in llama.cpp and wllama
 
-For changelog, please visit [releases page](https://github.com/reeselevine/wllama/releases)
+📄 [Documentation](https://github.ngxson.com/wllama/docs/)
+
+For changelog, please visit [releases page](https://github.com/ngxson/wllama/releases)
+
+> [!IMPORTANT]
+>
+> **🔥🔥 V3 is out, with WebGPU, multimodal and tool calling support. Read the [V3 release guide](./guides/intro-v3.md)**
+>
+> For compatibility issues, please refer to [@wllama/wllama-compat](./compat/README.md)
 
 ![](./assets/screenshot_0.png)
 
 ## Features
 
-- Typescript support
-- Can run inference directly on browser (using [WebAssembly SIMD](https://emscripten.org/docs/porting/simd.html)) or WebGPU.
-- WebGPU can be selected with `backend: 'webgpu'`
+- 🔌 OpenAI-compatible API (fully-typed built-in)
+- 🚀 WebGPU support
+- 🔥 Multimodal support (image and audio file input)
+- 🔥 Tool calling support
+- Can run inference directly on browser (using [WebAssembly SIMD](https://emscripten.org/docs/porting/simd.html)), no backend or GPU is needed!
 - No runtime dependency (see [package.json](./package.json))
-- High-level API: completions, embeddings
-- Low-level API: (de)tokenize, KV cache control, sampling control,...
 - Ability to split the model into smaller files and load them in parallel (same as `split` and `cat`)
-- Auto switch between JSPI/ASYNCIFY and single-thread/multi-thread builds based on browser support
+- Auto switch between single-thread and multi-thread build based on browser support
 - Inference is done inside a worker, does not block UI render
-- Pre-built npm package [@reeselevine/wllama-webgpu](https://www.npmjs.com/package/@reeselevine/wllama-webgpu)
+- Pre-built npm package [@wllama/wllama](https://www.npmjs.com/package/@wllama/wllama)
 
 Limitations:
 - To enable multi-thread, you must add `Cross-Origin-Embedder-Policy` and `Cross-Origin-Opener-Policy` headers. See [this discussion](https://github.com/ffmpegwasm/ffmpeg.wasm/issues/106#issuecomment-913450724) for more details.
@@ -32,12 +39,11 @@ Limitations:
 
 ## Code demo and documentation
 
-📄 [Documentation](https://github.ngxson.com/wllama/docs/)
-
 Demo:
-- Basic usages with completions and embeddings: https://github.ngxson.com/wllama/examples/basic/
-- Embedding and cosine distance: https://github.ngxson.com/wllama/examples/embeddings/
-- For more advanced example using low-level API, have a look at test file: [wllama.test.ts](./src/wllama.test.ts)
+- Basic usages with completions and embeddings: https://github.ngxson.com/wllama/examples/basic/ ([source code](./examples/basic/index.html))
+- Embedding and cosine distance: https://github.ngxson.com/wllama/examples/embeddings/ ([source code](./examples/embeddings/index.html))
+- Multimodal (vision) completion: https://github.ngxson.com/wllama/examples/multimodal/ ([source code](./examples/multimodal/index.html))
+- Tool calling: https://github.ngxson.com/wllama/examples/tools/ ([source code](./examples/tools/index.html))
 
 ## How to use
 
@@ -46,20 +52,33 @@ Demo:
 Install it:
 
 ```bash
-npm i @reeselevine/wllama-webgpu
+npm i @wllama/wllama
 ```
+
+<details>
+
+<summary>Install from this git repo</summary>
+
+Wasm binaries do not come pre-built with this repo. You need docker installed on your machine to build them:
+
+```bash
+# recommend to clone as git submodule
+git submodule add https://github.com/ngxson/wllama.git wllama
+git submodule update --init --recursive
+
+# run the build
+cd wllama
+npm ci
+npm run build:wasm && npm run build
+```
+
+</details>
 
 Then, import the module:
 
 ```ts
-import { Wllama } from '@reeselevine/wllama-webgpu';
-import WasmFromPackage from '@reeselevine/wllama-webgpu/esm/wasm-from-package.js';
-
-const WLLAMA_CONFIG_PATHS = WasmFromPackage;
-let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, {
-  backend: 'webgpu',
-  ...
-});
+import { Wllama } from '@wllama/wllama';
+let wllamaInstance = new Wllama(WLLAMA_CONFIG_PATHS, ...);
 // (the rest is the same with earlier example)
 ```
 
@@ -67,10 +86,24 @@ For complete code example, see [examples/main/src/utils/wllama.context.tsx](./ex
 
 NOTE: this example only covers completions usage. For embeddings, please see [examples/embeddings/index.html](./examples/embeddings/index.html)
 
+### WebGPU support
+
+WebGPU support is introduced via [PR #215](https://github.com/ngxson/wllama/pull/215).
+
+Upon updating to V3.1, WebGPU will be enabled automatically. By default, all layers will be offloaded to GPU. If the model is too big to fit into VRAM, you can manually adjust the number of layers via the `n_gpu_layers` parameter of `LoadModelParams`. Example:
+
+```js
+// (optionally) will allow running WebGPU on Firefox via compat mode; performance will be significantly degraded
+wllama.setCompat('default', 'firefox_safari');
+
+await wllama.loadModel(files, {
+  n_gpu_layers: 4, // meaning 4 layers are offloaded to GPU; set to 0 to disable GPU inference
+});
+```
+
 ### Prepare your model
 
-- It is recommended to split the model into **chunks of maximum 512MB**. This will result in slightly faster download speed (because multiple splits can be downloaded in parallel), and also prevent some out-of-memory issues.
-  See the "Split model" section below for more details.
+- It is recommended to split the model into **chunks of maximum 512MB**. This will result in slightly faster download speed (because multiple splits can be downloaded in parallel), and also prevent some out-of-memory issues. **See the "Split model" section below for more details.**
 - It is recommended to use quantized Q4, Q5 or Q6 for balance among performance, file size and quality. Using IQ (with imatrix) is **not** recommended, may result in slow inference and low quality.
 
 ### Simple usage with ES6 module
@@ -82,17 +115,11 @@ import { Wllama } from './esm/index.js';
 
 (async () => {
   const CONFIG_PATHS = {
-    'jspi/single-thread/wllama.wasm': './esm/jspi-single-thread/wllama.wasm',
-    'asyncify/single-thread/wllama.wasm':
-      './esm/asyncify-single-thread/wllama.wasm',
-    'asyncify/multi-thread/wllama.wasm':
-      './esm/asyncify-multi-thread/wllama.wasm',
+    default: './esm/wasm/wllama.wasm',
   };
-  // Wllama will pick the JSPI or ASYNCIFY build automatically based on browser support.
-  // If you want to enforce single-thread, add { n_threads: 1 } to LoadModelConfig.
-  const wllama = new Wllama(CONFIG_PATHS, {
-    backend: 'webgpu',
-  });
+  // Automatically switch between single-thread and multi-thread version based on browser support
+  // If you want to enforce single-thread, add { "n_threads": 1 } to LoadModelConfig
+  const wllama = new Wllama(CONFIG_PATHS);
   // Define a function for tracking the model download progress
   const progressCallback =  ({ loaded, total }) => {
     // Calculate the progress as a percentage
@@ -103,43 +130,27 @@ import { Wllama } from './esm/index.js';
   // Load GGUF from Hugging Face hub
   // (alternatively, you can use loadModelFromUrl if the model is not from HF hub)
   await wllama.loadModelFromHF(
-    'ggml-org/models',
-    'tinyllamas/stories260K.gguf',
-    {
-      progressCallback,
-    }
+    { repo: 'ggml-org/models', file: 'tinyllamas/stories260K.gguf' },
+    { progressCallback }
   );
-  const outputText = await wllama.createCompletion(elemInput.value, {
-    nPredict: 50,
-    sampling: {
-      temp: 0.5,
-      top_k: 40,
-      top_p: 0.9,
-    },
+  const response = await wllama.createChatCompletion({
+    messages: [{ role: 'user', content: elemInput.value }],
+    max_tokens: 50,
+    temperature: 0.5,
+    top_k: 40,
+    top_p: 0.9,
   });
-  console.log(outputText);
+  console.log(response.choices[0].message.content);
 })();
 ```
 
-If you are using the published npm package in a bundler app, you can use the
-bundled `*.wasm` files directly:
+Alternatively, you can use the `*.wasm` files from CDN:
 
 ```js
-import WasmFromPackage from '@reeselevine/wllama-webgpu/esm/wasm-from-package.js';
-const wllama = new Wllama(WasmFromPackage, {
-  backend: 'webgpu',
-});
-```
-
-Alternatively, you can load the `*.wasm` files from CDN:
-
-```js
-import WasmFromCDN from '@reeselevine/wllama-webgpu/esm/wasm-from-cdn.js';
+import WasmFromCDN from '@wllama/wllama/esm/wasm-from-cdn.js';
 const wllama = new Wllama(WasmFromCDN);
 // NOTE: this is not recommended, only use when you can't embed wasm files in your project
 ```
-
-`WllamaConfig` uses `backend?: 'cpu' | 'webgpu'`. The library does not probe for WebGPU support before choosing the backend; callers should do that themselves when they want conditional selection.
 
 ### Split model
 
@@ -162,10 +173,10 @@ You can then pass to `loadModelFromUrl` or `loadModelFromHF` the URL of the firs
 const wllama = new Wllama(CONFIG_PATHS, {
   parallelDownloads: 5, // optional: maximum files to download in parallel (default: 3)
 });
-await wllama.loadModelFromHF(
-  'ngxson/tinyllama_split_test',
-  'stories15M-q8_0-00001-of-00003.gguf'
-);
+await wllama.loadModelFromHF({
+  repo: 'ngxson/tinyllama_split_test',
+  file: 'stories15M-q8_0-00001-of-00003.gguf',
+});
 ```
 
 ### Custom logger (suppress debug messages)
@@ -175,7 +186,7 @@ When initializing Wllama, you can pass a custom logger to Wllama.
 Example 1: Suppress debug message
 
 ```js
-import { Wllama, LoggerWithoutDebug } from '@reeselevine/wllama-webgpu';
+import { Wllama, LoggerWithoutDebug } from '@wllama/wllama';
 
 const wllama = new Wllama(pathConfig, {
   // LoggerWithoutDebug is predefined inside wllama
@@ -208,7 +219,7 @@ You can use the commands below to compile it yourself:
 # /!\ IMPORTANT: Require having docker compose installed
 
 # Clone the repository with submodule
-git clone --recurse-submodules https://github.com/reeselevine/wllama.git
+git clone --recurse-submodules https://github.com/ngxson/wllama.git
 cd wllama
 
 # Optionally, you can run this command to update llama.cpp to latest upstream version (bleeding-edge, use with your own risk!)
@@ -226,6 +237,8 @@ npm run build
 ## TODO
 
 - Add support for LoRA adapter
-- Support GPU inference via WebGL
 - Support multi-sequences: knowing the resource limitation when using WASM, I don't think having multi-sequences is a good idea
-- Multi-modal: Waiting for refactoring LLaVA implementation from llama.cpp
+
+## Acknowledgments
+
+Wllama was created and is maintained by [Xuan-Son Nguyen](https://ngxson.com/). The WebGPU backend for llama.cpp is maintained by [Reese Levine](https://reeselevine.github.io/). We thank all other contributors to both wllama and llama.cpp, whose work made this project possible.

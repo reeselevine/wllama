@@ -6,6 +6,10 @@ let wllamaExit;
 let wllamaDebug;
 
 let Module = null;
+let isCompat = false;
+let lastStack = '';
+let isAborted = false;
+let hasMultithread = false;
 
 //////////////////////////////////////////////////////////////
 // UTILS
@@ -13,12 +17,6 @@ let Module = null;
 
 // send message back to main thread
 const msg = (data, transfer) => postMessage(data, transfer);
-const toUintPtr = (ptr) => ptr >>> 0;
-const isMemory64 = () => !!RUN_OPTIONS.pathConfig['wllama.memory64'];
-const ptrToHeapOffset = (ptr) => (isMemory64() ? Number(ptr) : toUintPtr(ptr));
-const sizeToWasm = (size) => (isMemory64() ? BigInt(size) : size);
-const ptrToJsNumber = (value) =>
-  typeof value === 'bigint' ? Number(value) : value;
 
 // Convert CPP log into JS log
 const cppLogToJSLog = (line) => {
@@ -31,11 +29,30 @@ const cppLogToJSLog = (line) => {
     : { level: 'log', text: line };
 };
 
+const getHeapU8 = () => {
+  const buffer = Module.wasmMemory.buffer;
+  return new Uint8Array(buffer);
+};
+
+const toSizeT = (num) => {
+  return isCompat ? Number(num) : BigInt(num);
+};
+
 // Get module config that forwards stdout/err to main thread
 const getWModuleConfig = (_argMainScriptBlob) => {
   var pathConfig = RUN_OPTIONS.pathConfig;
   var pthreadPoolSize = RUN_OPTIONS.nbThread;
   var argMainScriptBlob = _argMainScriptBlob;
+
+  isCompat = RUN_OPTIONS.compat;
+  hasMultithread = pthreadPoolSize > 1;
+
+  msg({
+    verb: 'console.debug',
+    args: [
+      `Multithread enabled: ${hasMultithread}, pthreadPoolSize: ${pthreadPoolSize}`,
+    ],
+  });
 
   if (!pathConfig['wllama.wasm']) {
     throw new Error('"wllama.wasm" is missing in pathConfig');
@@ -50,6 +67,10 @@ const getWModuleConfig = (_argMainScriptBlob) => {
     printErr: function (text) {
       if (arguments.length > 1)
         text = Array.prototype.slice.call(arguments).join(' ');
+      if (text.startsWith('@@STACK@@')) {
+        lastStack = text.slice('@@STACK@@'.length);
+        return;
+      }
       const logLine = cppLogToJSLog(text);
       msg({ verb: 'console.' + logLine.level, args: [logLine.text] });
     },
@@ -72,11 +93,22 @@ const getWModuleConfig = (_argMainScriptBlob) => {
         return p;
       }
     },
-    mainScriptUrlOrBlob: argMainScriptBlob,
-    pthreadPoolSize,
-    wasmMemory: pthreadPoolSize > 1 ? getWasmMemory() : null,
-    onAbort: function (text) {
-      msg({ verb: 'signal.abort', args: [text] });
+    mainScriptUrlOrBlob: hasMultithread
+      ? argMainScriptBlob
+      : 'throw new Error("Multithreading is not enabled")',
+    pthreadPoolSize: hasMultithread ? pthreadPoolSize : 0,
+    wasmMemory: hasMultithread ? getWasmMemory() : null,
+    onAbort: function (message) {
+      isAborted = true;
+      msg({ verb: 'signal.abort', args: ['abort', message, lastStack, null] });
+    },
+    onExit: function (code) {
+      isAborted = true;
+      const callstack = new Error().stack.toString();
+      msg({
+        verb: 'signal.abort',
+        args: ['abort', 'exit(' + code + ')', callstack, null],
+      });
     },
   };
 };
@@ -92,9 +124,10 @@ const getWasmMemory = () => {
   while (maxBytes > minBytes) {
     try {
       const wasmMemory = new WebAssembly.Memory({
-        initial: minBytes / 65536,
-        maximum: maxBytes / 65536,
+        initial: toSizeT(minBytes / 65536),
+        maximum: toSizeT(maxBytes / 65536),
         shared: true,
+        address: isCompat ? undefined : 'i64',
       });
       return wasmMemory;
     } catch (e) {
@@ -106,7 +139,7 @@ const getWasmMemory = () => {
 };
 
 //////////////////////////////////////////////////////////////
-// MEMFS PATCH
+// HEAPFS PATCH
 //////////////////////////////////////////////////////////////
 
 /**
@@ -127,25 +160,14 @@ const getWasmMemory = () => {
  * Note 29/05/2024 @ngxson
  * Due to ftell() being limited to MAX_LONG, we cannot load files bigger than 2^31 bytes (or 2GB)
  * Ref: https://github.com/emscripten-core/emscripten/blob/main/system/lib/libc/musl/src/stdio/ftell.c
- *
- * For WebGPU, we want to extend this idea one level further to
- * avoid hitting memory limits, especially on mobile devices.
- * Download models directly to disk via OPFS, avoiding the WASM
- * heap to prevent growing the heap and having an extra copy of the model.
- * Then, stream it from disk directly to llama.cpp. We still need to
- * support async tensor uploads in llama.cpp WebGPU backend, which should
- * decrease memory usage even further.
- *
- * Note that the model cache manager is already backed by OPFS.
  */
 
 const fsNameToFile = {}; // map Name => File
 const fsIdToFile = {}; // map ID => File
 let currFileId = 0;
-const opfsHandles = {}; // map Name => { synchandle, size } for OPFS-backed files
 
 // Patch and redirect memfs calls to wllama
-const patchMEMFS = () => {
+const patchHeapFS = () => {
   const m = Module;
   // save functions
   m.MEMFS.stream_ops._read = m.MEMFS.stream_ops.read;
@@ -159,8 +181,8 @@ const patchMEMFS = () => {
     const name = stream.node.name;
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
-      const heapOffset = ptrToHeapOffset(f.ptr);
-      stream.node.contents = m.HEAPU8.subarray(heapOffset, heapOffset + f.size);
+      const ptr = Number(f.ptr);
+      stream.node.contents = getHeapU8().subarray(ptr, ptr + f.size);
       stream.node.usedBytes = f.size;
     }
   };
@@ -173,20 +195,6 @@ const patchMEMFS = () => {
     length,
     position
   ) {
-    const name = stream.node.name;
-    // OPFS-backed path for WebGPU
-    if (opfsHandles[name]) {
-      const { syncHandle, size } = opfsHandles[name];
-      const toRead = Math.min(length, size - position);
-      if (toRead <= 0) return 0;
-      const view = new Uint8Array(
-        buffer.buffer,
-        buffer.byteOffset + offset,
-        toRead
-      );
-      return syncHandle.read(view, { at: position });
-    }
-    // WASM heap-backed path for WASM
     patchStream(stream);
     return m.MEMFS.stream_ops._read(stream, buffer, offset, length, position);
   };
@@ -194,18 +202,6 @@ const patchMEMFS = () => {
 
   // replace "llseek" functions
   m.MEMFS.stream_ops.llseek = function (stream, offset, whence) {
-    const name = stream.node.name;
-    // OPFS-backed path for WebGPU
-    if (opfsHandles[name]) {
-      const { size } = opfsHandles[name];
-      let newPos = offset;
-      if (whence === 1) newPos += stream.position; // SEEK_CUR
-      if (whence === 2) newPos += size; // SEEK_END
-      if (newPos < 0) throw new Error('SEEK before start of file');
-      stream.position = newPos;
-      return newPos;
-    }
-    // WASM heap-backed path for WASM
     patchStream(stream);
     return m.MEMFS.stream_ops._llseek(stream, offset, whence);
   };
@@ -213,28 +209,13 @@ const patchMEMFS = () => {
 
   // replace "mmap" functions
   m.MEMFS.stream_ops.mmap = function (stream, length, position, prot, flags) {
-    const name = stream.node.name;
-    if (opfsHandles[name]) {
-      // OPFS-backed files must never be mmap'd — that would copy the entire model
-      // onto the WASM heap, defeating the whole point of the OPFS path.
-      // use_mmap=false is set in wllama.ts for WebGPU loads, so llama.cpp should
-      // never reach this branch. If it does, throw immediately so the bug is visible.
-      console.error(
-        `[OPFS] mmap called on OPFS-backed file "${name}" (length=${length}, position=${position}). This should never happen when use_mmap=false is set. Please report this as a bug.`
-      );
-      throw new Error(
-        `[wllama] mmap called on OPFS-backed file "${name}". ` +
-          `This should never happen when use_mmap=false is set. ` +
-          `Please report this as a bug.`
-      );
-    }
-
     patchStream(stream);
-
+    const name = stream.node.name;
     if (fsNameToFile[name]) {
       const f = fsNameToFile[name];
+      const mmapPtr = f.ptr + toSizeT(position);
       return {
-        ptr: ptrToHeapOffset(f.ptr) + ptrToJsNumber(position),
+        ptr: mmapPtr,
         allocated: false,
       };
     } else {
@@ -249,12 +230,12 @@ const patchMEMFS = () => {
 };
 
 // Allocate a new file in wllama heapfs, returns file ID
-const heapfsAlloc = (name, size) => {
+const heapfsAlloc = (name, size, allocBuffer) => {
   if (size < 1) {
     throw new Error('File size must be bigger than 0');
   }
   const m = Module;
-  const ptr = m.mmapAlloc(ptrToJsNumber(size));
+  const ptr = toSizeT(allocBuffer ? m.mmapAlloc(size) : 0);
   const file = {
     ptr: ptr,
     size: size,
@@ -267,64 +248,56 @@ const heapfsAlloc = (name, size) => {
 
 // Add new file to wllama heapfs, return number of written bytes
 const heapfsWrite = (id, buffer, offset) => {
-  const m = Module;
   if (fsIdToFile[id]) {
     const { ptr, size } = fsIdToFile[id];
-    const heapOffset = ptrToHeapOffset(ptr);
     const afterWriteByte = offset + buffer.byteLength;
     if (afterWriteByte > size) {
       throw new Error(
         `File ID ${id} write out of bound, afterWriteByte = ${afterWriteByte} while size = ${size}`
       );
     }
-    m.HEAPU8.set(buffer, heapOffset + offset);
+    getHeapU8().set(buffer, Number(ptr) + offset);
     return buffer.byteLength;
   } else {
     throw new Error(`File ID ${id} not found in heapfs`);
   }
 };
 
-const opfsAlloc = async (logicalName, opfsCacheFileName) => {
-  const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1) + ' MB';
-  console.log(`[OPFS] opfsAlloc: logicalName="${logicalName}" 
-    opfsCacheFileName="${opfsCacheFileName}"`);
+//////////////////////////////////////////////////////////////
+// ASYNC FILE READ
+//////////////////////////////////////////////////////////////
 
-  const opfsRoot = await navigator.storage.getDirectory();
-  const cacheDir = await opfsRoot.getDirectoryHandle('cache');
-  const fileHandle = await cacheDir.getFileHandle(opfsCacheFileName);
-  const syncHandle = await fileHandle.createSyncAccessHandle();
-  const size = syncHandle.getSize();
-  opfsHandles[logicalName] = { syncHandle, size };
+let isAwaitReading = false;
+let pendingReadPromise = null;
+let pendingReadResolve = null;
+let pendingReadReject = null;
 
-  // Create a handle in MEMfs so Emscripten can refer to the file
-  Module['FS_createDataFile'](
-    '/models',
-    logicalName,
-    new Uint8Array(0),
-    true,
-    true,
-    true
-  );
-  // Set usedBytes so fstat() returns the real file size.
-  Module.FS.lookupPath('/models/' + logicalName).node.usedBytes = size;
-  console.log(
-    `[OPFS] opfsAlloc: created MEMFS placeholder at /models/${logicalName} with usedBytes=${size}`
-  );
+const _stripModelsPrefix = (path) => path.replace(/^\/?models\//, '');
 
-  return size;
-};
+// Called from EM_ASYNC_JS stub in wllama-fs.h (path is already a JS string)
+const _wllama_js_file_read = async (path, offset, req_size, out_ptr) => {
+  const name = _stripModelsPrefix(path);
 
-const opfsFreeAll = () => {
-  const names = Object.keys(opfsHandles);
-  for (const [name, { syncHandle }] of Object.entries(opfsHandles)) {
-    try {
-      syncHandle.close();
-      Module.FS.unlink('/models/' + name);
-    } catch (e) {
-      console.warn('[OPFS] Error freeing ' + name + ': ' + e);
-    }
-    delete opfsHandles[name];
+  pendingReadPromise = new Promise((res, rej) => {
+    pendingReadResolve = res;
+    pendingReadReject = rej;
+  });
+  isAwaitReading = true;
+
+  postMessage({ verb: 'fs.read_req', args: [name, offset, req_size] });
+
+  let data;
+  try {
+    data = await pendingReadPromise;
+  } finally {
+    isAwaitReading = false;
+    pendingReadResolve = null;
+    pendingReadReject = null;
   }
+
+  const bytes = new Uint8Array(data);
+  getHeapU8().set(bytes, out_ptr);
+  return toSizeT(bytes.length);
 };
 
 //////////////////////////////////////////////////////////////
@@ -338,10 +311,15 @@ const callWrapper = (name, ret, args, isAsync) => {
     args,
     isAsync ? { async: true } : undefined
   );
-  return async (...callArgs) => {
+  return async (action, req) => {
+    // console.log(`Calling ${name} with action:`, action, 'and req:', req);
     let result;
     try {
-      result = isAsync ? await fn(...callArgs) : fn(...callArgs);
+      if (args.length === 2) {
+        result = isAsync ? await fn(action, req) : fn(action, req);
+      } else {
+        result = fn();
+      }
     } catch (ex) {
       console.error(ex);
       throw ex;
@@ -350,9 +328,104 @@ const callWrapper = (name, ret, args, isAsync) => {
   };
 };
 
+// re-entering the wasm while a call is suspended (JSPI / asyncify) corrupts its state, so only one call runs at a time and the rest wait in the queue
+let wasmCallBusy = false;
+const wasmCallQueue = [];
+
+const runWasmCall = async (callbackId, fn) => {
+  if (isAborted) {
+    // the wasm is dead, fail fast instead of calling into it
+    msg({ callbackId, err: 'wllama has crashed, please reload the module' });
+    return;
+  }
+  if (wasmCallBusy) {
+    wasmCallQueue.push({ callbackId, fn });
+    return;
+  }
+  wasmCallBusy = true;
+  try {
+    await fn();
+  } finally {
+    wasmCallBusy = false;
+    if (isAborted) {
+      // do not touch the wasm again after it aborted; the main thread already rejected the queued tasks
+      wasmCallQueue.length = 0;
+    } else {
+      const next = wasmCallQueue.shift();
+      if (next) runWasmCall(next.callbackId, next.fn);
+    }
+  }
+};
+
+const runAction = async (data) => {
+  const { args, callbackId } = data;
+  const argAction = args[0];
+  const argEncodedMsg = args[1];
+  try {
+    const inputPtr = await wllamaMalloc(toSizeT(argEncodedMsg.byteLength), 0);
+    // copy data to wasm heap
+    const inputBuffer = new Uint8Array(
+      getHeapU8().buffer,
+      Number(inputPtr),
+      argEncodedMsg.byteLength
+    );
+    inputBuffer.set(argEncodedMsg, 0);
+    const outputPtr = await wllamaAction(argAction, inputPtr);
+    // length of output buffer is written at the first 4 bytes of input buffer
+    const outputLen = new Uint32Array(
+      getHeapU8().buffer,
+      Number(inputPtr),
+      1
+    )[0];
+    // copy the output buffer to JS heap
+    const outputBuffer = new Uint8Array(outputLen);
+    const outputSrcView = new Uint8Array(
+      getHeapU8().buffer,
+      Number(outputPtr),
+      outputLen
+    );
+    outputBuffer.set(outputSrcView, 0); // copy it
+    msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
+  } catch (err) {
+    handleError(err);
+  }
+};
+
+function handleError(err) {
+  // If WASM already aborted, onAbort already sent signal.abort; skip to avoid
+  // re-reporting the resulting WebAssembly.RuntimeError as a JS exception.
+  if (isAborted) return;
+
+  const message = err ? err.message || String(err) : 'Unknown error';
+  const stack = err ? err.stack || String(err) : '';
+  msg({
+    verb: 'signal.abort',
+    args: ['exception', message, stack, err],
+  });
+}
+
 onmessage = async (e) => {
   if (!e.data) return;
   const { verb, args, callbackId } = e.data;
+
+  // fs.read_res arrives while wasm is JSPI-suspended; resolve the pending promise.
+  if (verb === 'fs.read_res') {
+    if (pendingReadResolve) {
+      pendingReadResolve(args[0]);
+    }
+    return;
+  }
+
+  // Guard: while awaiting a file read, reject any other incoming task.
+  if (isAwaitReading) {
+    if (callbackId) {
+      msg({
+        callbackId,
+        err: 'Worker is suspended waiting for file data (JSPI)',
+      });
+    }
+    return;
+  }
 
   if (!callbackId) {
     msg({ verb: 'console.error', args: ['callbackId is required', e.data] });
@@ -361,22 +434,25 @@ onmessage = async (e) => {
 
   if (verb === 'module.init') {
     const argMainScriptBlob = args[0];
+    const argUseAsyncFile = args[1];
     try {
       Module = getWModuleConfig(argMainScriptBlob);
+      Module.preRun = () => {
+        if (argUseAsyncFile) {
+          Module.ENV['USE_ASYNC_FILE'] = '1';
+        }
+      };
       Module.onRuntimeInitialized = () => {
         // async call once module is ready
         // init FS
-        patchMEMFS();
+        patchHeapFS();
         // init cwrap
-        const pointer = isMemory64() ? 'bigint' : 'number';
-        const sizeArg = isMemory64() ? 'bigint' : 'number';
+        const pointer = isCompat ? 'number' : 'bigint';
         // TODO: note sure why emscripten cannot bind if there is only 1 argument
-        wllamaMalloc = callWrapper(
-          'wllama_malloc',
+        wllamaMalloc = callWrapper('wllama_malloc', pointer, [
+          'number',
           pointer,
-          [sizeArg, 'number'],
-          false
-        );
+        ]);
         wllamaStart = callWrapper('wllama_start', 'string', [], true);
         wllamaAction = callWrapper(
           'wllama_action',
@@ -384,13 +460,13 @@ onmessage = async (e) => {
           ['string', pointer],
           true
         );
-        wllamaExit = callWrapper('wllama_exit', 'string', [], false);
-        wllamaDebug = callWrapper('wllama_debug', 'string', [], false);
+        wllamaExit = callWrapper('wllama_exit', 'string', []);
+        wllamaDebug = callWrapper('wllama_debug', 'string', []);
         msg({ callbackId, result: null });
       };
       wModuleInit();
     } catch (err) {
-      msg({ callbackId, err });
+      handleError(err);
     }
     return;
   }
@@ -398,9 +474,10 @@ onmessage = async (e) => {
   if (verb === 'fs.alloc') {
     const argFilename = args[0];
     const argSize = args[1];
+    const argAllocBuffer = args[2];
     try {
       // create blank file
-      const emptyBuffer = new Uint8Array(0);
+      const emptyBuffer = new ArrayBuffer(0);
       Module['FS_createDataFile'](
         '/models',
         argFilename,
@@ -410,22 +487,10 @@ onmessage = async (e) => {
         true
       );
       // alloc data on heap
-      const fileId = heapfsAlloc(argFilename, argSize);
+      const fileId = heapfsAlloc(argFilename, argSize, argAllocBuffer);
       msg({ callbackId, result: { fileId } });
     } catch (err) {
-      msg({ callbackId, err });
-    }
-    return;
-  }
-
-  if (verb === 'fs.opfs-alloc') {
-    const argLogicalName = args[0];
-    const argOpfsCacheFileName = args[1];
-    try {
-      const size = await opfsAlloc(argLogicalName, argOpfsCacheFileName);
-      msg({ callbackId, result: { size } });
-    } catch (err) {
-      msg({ callbackId, err });
+      handleError(err);
     }
     return;
   }
@@ -438,84 +503,49 @@ onmessage = async (e) => {
       const writtenBytes = heapfsWrite(argFileId, argBuffer, argOffset);
       msg({ callbackId, result: { writtenBytes } });
     } catch (err) {
-      msg({ callbackId, err });
+      handleError(err);
     }
     return;
   }
 
   if (verb === 'wllama.start') {
-    try {
-      const result = await wllamaStart();
-      msg({ callbackId, result });
-    } catch (err) {
-      msg({ callbackId, err });
-    }
+    await runWasmCall(callbackId, async () => {
+      try {
+        const result = await wllamaStart();
+        msg({ callbackId, result });
+      } catch (err) {
+        handleError(err);
+      }
+    });
     return;
   }
 
   if (verb === 'wllama.action') {
-    const argAction = args[0];
-    const argEncodedMsg = args[1];
-    try {
-      const inputPtr = await wllamaMalloc(
-        sizeToWasm(argEncodedMsg.byteLength),
-        0
-      );
-      const inputHeapOffset = ptrToHeapOffset(inputPtr);
-      // copy data to wasm heap
-      const inputBuffer = new Uint8Array(
-        Module.HEAPU8.buffer,
-        inputHeapOffset,
-        argEncodedMsg.byteLength
-      );
-      inputBuffer.set(argEncodedMsg, 0);
-      const outputPtr = await wllamaAction(argAction, inputPtr);
-      // length of output buffer is written at the first 4 bytes of input buffer
-      const outputLen = new Uint32Array(
-        Module.HEAPU8.buffer,
-        inputHeapOffset,
-        1
-      )[0];
-      // copy the output buffer to JS heap
-      const outputBuffer = new Uint8Array(outputLen);
-      const outputHeapOffset = ptrToHeapOffset(outputPtr);
-      const outputSrcView = new Uint8Array(
-        Module.HEAPU8.buffer,
-        outputHeapOffset,
-        outputLen
-      );
-      outputBuffer.set(outputSrcView, 0); // copy it
-
-      // After the model is loaded into WebGPU buffers, we can delete
-      // the OPFS copy.
-      const useWebGPU = RUN_OPTIONS.pathConfig['wllama.useWebGPU'];
-      if (argAction === 'load' && useWebGPU) {
-        opfsFreeAll();
-      }
-      msg({ callbackId, result: outputBuffer }, [outputBuffer.buffer]);
-    } catch (err) {
-      msg({ callbackId, err });
-    }
+    await runWasmCall(callbackId, () => runAction(e.data));
     return;
   }
 
   if (verb === 'wllama.exit') {
-    try {
-      const result = await wllamaExit();
-      msg({ callbackId, result });
-    } catch (err) {
-      msg({ callbackId, err });
-    }
+    await runWasmCall(callbackId, async () => {
+      try {
+        const result = await wllamaExit();
+        msg({ callbackId, result });
+      } catch (err) {
+        handleError(err);
+      }
+    });
     return;
   }
 
   if (verb === 'wllama.debug') {
-    try {
-      const result = await wllamaDebug();
-      msg({ callbackId, result });
-    } catch (err) {
-      msg({ callbackId, err });
-    }
+    await runWasmCall(callbackId, async () => {
+      try {
+        const result = await wllamaDebug();
+        msg({ callbackId, result });
+      } catch (err) {
+        handleError(err);
+      }
+    });
     return;
   }
 };

@@ -20,8 +20,8 @@
 #include <vector>
 #include <functional>
 
-// increase when messages change
-#define GLUE_VERSION 2
+// reserved for future, do not edit the version number for now
+#define GLUE_VERSION 1
 
 #define GLUE_MAGIC 0x45554c47 // "GLUE"
 #define GLUE_PROTO_ID_LEN 8
@@ -146,6 +146,12 @@ struct glue_inbuf
   {
     uint32_t size = read_u32();
     out = read_raw(size);
+  }
+  void read(std::vector<uint8_t> &out)
+  {
+    uint32_t size = read_u32();
+    auto tmp = read_raw(size);
+    out.assign((uint8_t*)tmp.data(), (uint8_t*)tmp.data() + tmp.size());
   }
 };
 
@@ -349,9 +355,9 @@ DEF_GLUE_ARR(str, std::string, GLUE_DTYPE_ARRAY_STRING, {
   output.append_u32(elem.size());
   output.append_str(elem);
 })
-DEF_GLUE_ARR(raw, std::vector<char>, GLUE_DTYPE_ARRAY_RAW, {
+DEF_GLUE_ARR(raw, std::vector<uint8_t>, GLUE_DTYPE_ARRAY_RAW, {
   output.append_u32(elem.size());
-  output.append(elem.data(), elem.size());
+  output.append((const char*)elem.data(), elem.size());
 })
 
 // Message base
@@ -491,19 +497,20 @@ struct glue_msg_load_req
 {
   GLUE_HANDLER("load_req")
   GLUE_FIELD(arr_str, model_paths)
+  GLUE_FIELD_NULLABLE(str, mmproj_path)
   GLUE_FIELD(bool, n_ctx_auto)
   GLUE_FIELD(bool, use_mmap)
   GLUE_FIELD(bool, use_mlock)
-  GLUE_FIELD(bool, use_webgpu)
   GLUE_FIELD(int, n_gpu_layers)
-  GLUE_FIELD(bool, no_perf)
-  GLUE_FIELD(int, seed)
   GLUE_FIELD(int, n_ctx)
   GLUE_FIELD(int, n_threads)
+  GLUE_FIELD_NULLABLE(str, model_alias)
+  GLUE_FIELD_NULLABLE(int, log_level)
   GLUE_FIELD_NULLABLE(bool, embeddings)
   GLUE_FIELD_NULLABLE(bool, offload_kqv)
   GLUE_FIELD_NULLABLE(int, n_batch)
-  GLUE_FIELD_NULLABLE(int, n_seq_max)
+  GLUE_FIELD_NULLABLE(int, n_ubatch)
+  GLUE_FIELD_NULLABLE(int, n_parallel)
   GLUE_FIELD_NULLABLE(str, pooling_type)
   GLUE_FIELD_NULLABLE(str, rope_scaling_type)
   GLUE_FIELD_NULLABLE(float, rope_freq_base)
@@ -515,8 +522,43 @@ struct glue_msg_load_req
   GLUE_FIELD_NULLABLE(int, yarn_orig_ctx)
   GLUE_FIELD_NULLABLE(str, cache_type_k)
   GLUE_FIELD_NULLABLE(str, cache_type_v)
+  GLUE_FIELD_NULLABLE(bool, kv_unified)
   GLUE_FIELD_NULLABLE(bool, flash_attn)
   GLUE_FIELD_NULLABLE(bool, swa_full)
+  GLUE_FIELD_NULLABLE(int, n_ctx_checkpoints)
+  GLUE_FIELD_NULLABLE(int, checkpoint_min_step)
+  GLUE_FIELD_NULLABLE(str, chat_template)
+  GLUE_FIELD_NULLABLE(bool, jinja)
+  GLUE_FIELD_NULLABLE(arr_str, default_template_kwargs_keys)
+  GLUE_FIELD_NULLABLE(arr_str, default_template_kwargs_vals)
+  GLUE_FIELD_NULLABLE(bool, reasoning)
+  GLUE_FIELD_NULLABLE(int, image_min_tokens)
+  GLUE_FIELD_NULLABLE(int, image_max_tokens)
+  GLUE_FIELD_NULLABLE(bool, warmup)
+  GLUE_FIELD_NULLABLE(bool, no_kv_offload)
+  GLUE_FIELD_NULLABLE(bool, mmproj_offload)
+  GLUE_FIELD_NULLABLE(bool, cont_batching)
+  GLUE_FIELD_NULLABLE(int, n_keep)
+  GLUE_FIELD_NULLABLE(bool, ctx_shift)
+  GLUE_FIELD_NULLABLE(bool, cache_idle_slots)
+  GLUE_FIELD_NULLABLE(int, n_cache_reuse)
+  GLUE_FIELD_NULLABLE(arr_str, lora_paths)
+  GLUE_FIELD_NULLABLE(arr_float, lora_scales)
+  GLUE_FIELD_NULLABLE(bool, lora_init_without_apply)
+  GLUE_FIELD_NULLABLE(str, spec_draft_model)
+  GLUE_FIELD_NULLABLE(int, spec_draft_ngl)
+  GLUE_FIELD_NULLABLE(int, spec_draft_n_max)
+  GLUE_FIELD_NULLABLE(int, spec_draft_n_min)
+  GLUE_FIELD_NULLABLE(float, spec_draft_p_min)
+  GLUE_FIELD_NULLABLE(int, spec_draft_threads)
+  GLUE_FIELD_NULLABLE(int, spec_draft_threads_batch)
+  GLUE_FIELD_NULLABLE(arr_str, kv_overrides_keys)
+  GLUE_FIELD_NULLABLE(arr_str, kv_overrides_vals)
+  GLUE_FIELD_NULLABLE(int, reasoning_budget_tokens)
+  GLUE_FIELD_NULLABLE(str, reasoning_budget_message)
+  GLUE_FIELD_NULLABLE(str, reasoning_format)
+  GLUE_FIELD_NULLABLE(bool, skip_chat_parsing)
+  GLUE_FIELD_NULLABLE(bool, prefill_assistant)
 };
 
 struct glue_msg_load_res
@@ -540,368 +582,101 @@ struct glue_msg_load_res
   GLUE_FIELD(bool, add_eos_token)
   GLUE_FIELD(bool, has_encoder)
   GLUE_FIELD(int, token_decoder_start)
+  GLUE_FIELD(str, media_marker)
+  GLUE_FIELD(bool, has_image_input)
+  GLUE_FIELD(bool, has_audio_input)
 };
 
 /////////
 
-struct glue_msg_set_options_req
+struct glue_msg_completion_req
 {
-  GLUE_HANDLER("opti_req")
-  GLUE_FIELD(bool, embeddings)
+  GLUE_HANDLER("cmpl_req")
+  GLUE_FIELD(bool, is_chat)
+  GLUE_FIELD(str, data_json)
+  GLUE_FIELD(arr_raw, files)
 };
 
-struct glue_msg_set_options_res
+struct glue_msg_completion_res
 {
-  GLUE_HANDLER("opti_res")
+  GLUE_HANDLER("cmpl_res")
   GLUE_FIELD(bool, success)
+  GLUE_FIELD(int, req_id)
 };
 
 /////////
 
-struct glue_msg_sampling_init_req
+struct glue_msg_embedding_req
 {
-  GLUE_HANDLER("sint_req")
-  GLUE_FIELD_NULLABLE(int, mirostat)
-  GLUE_FIELD_NULLABLE(float, mirostat_tau)
-  GLUE_FIELD_NULLABLE(float, mirostat_eta)
-  GLUE_FIELD_NULLABLE(float, temp)
-  GLUE_FIELD_NULLABLE(float, top_p)
-  GLUE_FIELD_NULLABLE(int, top_k)
-  GLUE_FIELD_NULLABLE(int, penalty_last_n)
-  GLUE_FIELD_NULLABLE(float, penalty_repeat)
-  GLUE_FIELD_NULLABLE(float, penalty_freq)
-  GLUE_FIELD_NULLABLE(float, penalty_present)
-  GLUE_FIELD_NULLABLE(float, dynatemp_range)
-  GLUE_FIELD_NULLABLE(float, dynatemp_exponent)
-  GLUE_FIELD_NULLABLE(arr_str, samplers_sequence)
-  GLUE_FIELD_NULLABLE(str, grammar)
-  GLUE_FIELD_NULLABLE(int, n_prev)
-  GLUE_FIELD_NULLABLE(int, n_probs)
-  GLUE_FIELD_NULLABLE(float, min_p)
-  GLUE_FIELD_NULLABLE(float, typical_p)
-  GLUE_FIELD_NULLABLE(float, typ_p)
-  GLUE_FIELD_NULLABLE(arr_int, logit_bias_toks)
-  GLUE_FIELD_NULLABLE(arr_float, logit_bias_vals)
-  GLUE_FIELD_NULLABLE(arr_int, tokens)
+  GLUE_HANDLER("embd_req")
+  GLUE_FIELD(str, data_json)
+  GLUE_FIELD(arr_raw, files)
 };
 
-struct glue_msg_sampling_init_res
+struct glue_msg_embedding_res
 {
-  GLUE_HANDLER("sint_res")
+  GLUE_HANDLER("embd_res")
   GLUE_FIELD(bool, success)
+  GLUE_FIELD(int, req_id)
 };
 
 /////////
 
-struct glue_msg_get_vocab_req
+struct glue_msg_rerank_req
 {
-  GLUE_HANDLER("gvoc_req")
+  GLUE_HANDLER("rrnk_req")
+  GLUE_FIELD(str, data_json)
 };
 
-struct glue_msg_get_vocab_res
+struct glue_msg_rerank_res
 {
-  GLUE_HANDLER("gvoc_res")
+  GLUE_HANDLER("rrnk_res")
   GLUE_FIELD(bool, success)
-  GLUE_FIELD(arr_raw, vocab)
+  GLUE_FIELD(int, req_id)
 };
 
 /////////
 
-struct glue_msg_lookup_token_req
+struct glue_msg_get_result_req
 {
-  GLUE_HANDLER("lkup_req")
-  GLUE_FIELD(str, piece) // TODO: maybe use raw instead
+  GLUE_HANDLER("gres_req")
+  GLUE_FIELD(int, req_id)
 };
 
-struct glue_msg_lookup_token_res
+struct glue_msg_get_result_res
 {
-  GLUE_HANDLER("lkup_res")
+  GLUE_HANDLER("gres_res")
   GLUE_FIELD(bool, success)
-  GLUE_FIELD(int, token)
+  GLUE_FIELD(bool, has_more)
+  GLUE_FIELD(bool, is_error)
+  GLUE_FIELD(str, data_json)
 };
 
 /////////
 
-struct glue_msg_tokenize_req
+struct glue_msg_cancel_req
 {
-  GLUE_HANDLER("tokn_req")
-  GLUE_FIELD(str, text)
-  GLUE_FIELD(bool, special)
+  GLUE_HANDLER("cncl_req")
+  GLUE_FIELD(int, req_id)
 };
 
-struct glue_msg_tokenize_res
+struct glue_msg_cancel_res
 {
-  GLUE_HANDLER("tokn_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(arr_int, tokens)
-};
-
-/////////
-
-struct glue_msg_detokenize_req
-{
-  GLUE_HANDLER("dtkn_req")
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_detokenize_res
-{
-  GLUE_HANDLER("dtkn_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(raw, buffer)
-};
-
-/////////
-
-struct glue_msg_decode_req
-{
-  GLUE_HANDLER("deco_req")
-  GLUE_FIELD(arr_int, tokens)
-  GLUE_FIELD(bool, skip_logits)
-};
-
-struct glue_msg_decode_res
-{
-  GLUE_HANDLER("deco_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(int, n_past)
-};
-
-/////////
-
-struct glue_msg_encode_req
-{
-  GLUE_HANDLER("enco_req")
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_encode_res
-{
-  GLUE_HANDLER("enco_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(int, n_past)
-};
-
-/////////
-
-struct glue_msg_sampling_sample_req
-{
-  GLUE_HANDLER("ssam_req")
-};
-
-struct glue_msg_sampling_sample_res
-{
-  GLUE_HANDLER("ssam_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(raw, piece)
-  GLUE_FIELD(int, token)
-};
-
-/////////
-
-struct glue_msg_sampling_accept_req
-{
-  GLUE_HANDLER("sacc_req")
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_sampling_accept_res
-{
-  GLUE_HANDLER("sacc_res")
+  GLUE_HANDLER("cncl_res")
   GLUE_FIELD(bool, success)
 };
 
 /////////
 
-struct glue_msg_get_logits_req
+struct glue_msg_test_backend_ops_req
 {
-  GLUE_HANDLER("glog_req")
-  GLUE_FIELD(int, top_k)
+  GLUE_HANDLER("tbop_req")
+  GLUE_FIELD(arr_str, args)
 };
 
-struct glue_msg_get_logits_res
+struct glue_msg_test_backend_ops_res
 {
-  GLUE_HANDLER("glog_res")
+  GLUE_HANDLER("tbop_res")
+  GLUE_FIELD(int, retcode)
   GLUE_FIELD(bool, success)
-  GLUE_FIELD(arr_int, tokens)
-  GLUE_FIELD(arr_float, probs)
-};
-
-/////////
-
-struct glue_msg_get_embeddings_req
-{
-  GLUE_HANDLER("gemb_req")
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_get_embeddings_res
-{
-  GLUE_HANDLER("gemb_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(arr_float, embeddings)
-};
-
-/////////
-
-struct glue_msg_get_kv_remove_req
-{
-  GLUE_HANDLER("kvcr_req")
-  GLUE_FIELD(int, n_keep)
-  GLUE_FIELD(int, n_discard)
-};
-
-struct glue_msg_get_kv_remove_res
-{
-  GLUE_HANDLER("kvcr_res")
-  GLUE_FIELD(int, n_past)
-  GLUE_FIELD(bool, success)
-};
-
-/////////
-
-struct glue_msg_get_kv_clear_req
-{
-  GLUE_HANDLER("kvcc_req")
-};
-
-struct glue_msg_get_kv_clear_res
-{
-  GLUE_HANDLER("kvcc_res")
-  GLUE_FIELD(int, n_past)
-  GLUE_FIELD(bool, success)
-};
-
-/////////
-
-struct glue_msg_session_save_req
-{
-  GLUE_HANDLER("sesa_req")
-  GLUE_FIELD(str, session_path)
-};
-
-struct glue_msg_session_save_res
-{
-  GLUE_HANDLER("sesa_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(arr_int, tokens)
-};
-
-/////////
-
-struct glue_msg_session_load_req
-{
-  GLUE_HANDLER("sesl_req")
-  GLUE_FIELD(str, session_path)
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_session_load_res
-{
-  GLUE_HANDLER("sesl_res")
-  GLUE_FIELD(bool, success)
-};
-
-/////////
-
-struct glue_msg_status_req
-{
-  GLUE_HANDLER("stat_req")
-};
-
-struct glue_msg_status_res
-{
-  GLUE_HANDLER("stat_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(arr_int, tokens)
-};
-
-/////////
-
-struct glue_msg_perf_context_req
-{
-  GLUE_HANDLER("pctx_req")
-};
-
-struct glue_msg_perf_context_res
-{
-  GLUE_HANDLER("pctx_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(float, t_start_ms)
-  GLUE_FIELD(float, t_load_ms)
-  GLUE_FIELD(float, t_p_eval_ms)
-  GLUE_FIELD(float, t_eval_ms)
-  GLUE_FIELD(int, n_p_eval)
-  GLUE_FIELD(int, n_eval)
-  GLUE_FIELD(int, n_reused)
-};
-
-struct glue_msg_perf_reset_req
-{
-  GLUE_HANDLER("prst_req")
-};
-
-struct glue_msg_perf_reset_res
-{
-  GLUE_HANDLER("prst_res")
-  GLUE_FIELD(bool, success)
-};
-
-/////////
-
-struct glue_msg_test_benchmark_req
-{
-  GLUE_HANDLER("tben_req")
-  GLUE_FIELD(str, type)
-  GLUE_FIELD(int, n_samples)
-};
-
-struct glue_msg_test_benchmark_res
-{
-  GLUE_HANDLER("tben_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(int, t_ms)
-};
-
-/////////
-
-struct glue_msg_test_perplexity_req
-{
-  GLUE_HANDLER("tper_req")
-  GLUE_FIELD(arr_int, tokens)
-};
-
-struct glue_msg_test_perplexity_res
-{
-  GLUE_HANDLER("tper_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(float, ppl)
-  GLUE_FIELD(float, nll)
-  GLUE_FIELD(float, cross_entropy)
-  GLUE_FIELD(int, n_tokens)
-  GLUE_FIELD(int, t_ms)
-};
-
-/////////
-
-struct glue_msg_chat_format_req
-{
-  GLUE_HANDLER("cfmt_req")
-  GLUE_FIELD_NULLABLE(str, tmpl)
-  GLUE_FIELD_NULLABLE(bool, add_ass)
-  GLUE_FIELD(arr_str, roles)
-  GLUE_FIELD(arr_str, contents)
-};
-
-struct glue_msg_chat_format_res
-{
-  GLUE_HANDLER("cfmt_res")
-  GLUE_FIELD(bool, success)
-  GLUE_FIELD(str, message)
-  GLUE_FIELD(str, formatted_chat)
 };

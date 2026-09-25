@@ -1,40 +1,23 @@
 import { useState } from 'react';
-import type { PerfContextData } from '@reeselevine/wllama-webgpu';
 import { useMessages } from '../utils/messages.context';
 import { useWllama } from '../utils/wllama.context';
 import { Message, Screen } from '../utils/types';
-import { formatChat } from '../utils/utils';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faStop } from '@fortawesome/free-solid-svg-icons';
 import ScreenWrapper from './ScreenWrapper';
 import { useIntervalWhen } from '../utils/use-interval-when';
 import { MarkdownMessage } from './MarkdownMessage';
 
-const createInitialPerfData = (): PerfContextData => ({
-  success: true,
-  t_start_ms: 0,
-  t_load_ms: 0,
-  t_p_eval_ms: 0,
-  t_eval_ms: 0,
-  n_p_eval: 0,
-  n_eval: 0,
-  n_reused: 0,
-});
-
 export default function ChatScreen() {
   const [input, setInput] = useState('');
-  const [perfData, setPerfData] = useState<PerfContextData>(
-    createInitialPerfData()
-  );
-  const [perfError, setPerfError] = useState<string | null>(null);
-  const [perfBusy, setPerfBusy] = useState(false);
   const {
     currentConvId,
     isGenerating,
     createCompletion,
     navigateTo,
     loadedModel,
-    getWllamaInstance,
+    timings,
+    resetTimings,
     stopCompletion,
   } = useWllama();
   const {
@@ -47,38 +30,6 @@ export default function ChatScreen() {
   useIntervalWhen(chatScrollToBottom, 500, isGenerating, true);
 
   const currConv = getConversationById(currentConvId);
-
-  const refreshPerf = async () => {
-    if (!loadedModel) return;
-    setPerfBusy(true);
-    setPerfError(null);
-    try {
-      setPerfData(await getWllamaInstance().getPerfContext());
-    } catch (e) {
-      setPerfError((e as any)?.message ?? 'Failed to fetch perf data');
-    } finally {
-      setPerfBusy(false);
-    }
-  };
-
-  const resetPerf = async () => {
-    if (!loadedModel) return;
-    setPerfBusy(true);
-    setPerfError(null);
-    try {
-      await getWllamaInstance().resetPerfContext();
-      setPerfData(await getWllamaInstance().getPerfContext());
-    } catch (e) {
-      setPerfError((e as any)?.message ?? 'Failed to reset perf data');
-    } finally {
-      setPerfBusy(false);
-    }
-  };
-
-  const formatTokPerSec = (tokens: number, ms: number) => {
-    if (ms <= 0) return '0.0';
-    return (tokens / (ms / 1000)).toFixed(1);
-  };
 
   const onSubmit = async () => {
     if (isGenerating) return;
@@ -116,21 +67,13 @@ export default function ChatScreen() {
     if (!loadedModel) {
       throw new Error('loadedModel is null');
     }
-    let formattedChat: string;
     try {
-      formattedChat = await formatChat(getWllamaInstance(), [
-        ...currHistory,
-        userMsg,
-      ]);
-    } catch (e) {
-      alert(`Error while formatting chat: ${(e as any)?.message ?? 'unknown'}`);
-      throw e;
+      await createCompletion([...currHistory, userMsg], (newContent) => {
+        editMessageInConversation(convId, assistantMsg.id, newContent);
+      });
+    } catch (error) {
+      alert(`Generation failed: ${(error as Error).message}`);
     }
-    console.log({ formattedChat });
-    await createCompletion(formattedChat, (newContent) => {
-      editMessageInConversation(convId, assistantMsg.id, newContent);
-    });
-    await refreshPerf();
   };
 
   return (
@@ -198,23 +141,16 @@ export default function ChatScreen() {
             <div className="mt-3 text-xs">
               <div className="flex items-center justify-between">
                 <div>
-                  {perfError && (
-                    <div className="text-error">Error: {perfError}</div>
-                  )}
-                  {!perfError && (
-                    <div>
-                      Prefill:{' '}
-                      {formatTokPerSec(perfData.n_p_eval, perfData.t_p_eval_ms)}{' '}
-                      tok/s, Decode:{' '}
-                      {formatTokPerSec(perfData.n_eval, perfData.t_eval_ms)}{' '}
-                      tok/s
-                    </div>
-                  )}
+                  <div>
+                    Prefill: {(timings?.prompt_per_second ?? 0).toFixed(1)}{' '}
+                    tok/s, Decode:{' '}
+                    {(timings?.predicted_per_second ?? 0).toFixed(1)} tok/s
+                  </div>
                 </div>
                 <button
                   className="btn btn-xs btn-outline"
-                  disabled={perfBusy || isGenerating}
-                  onClick={resetPerf}
+                  disabled={isGenerating}
+                  onClick={resetTimings}
                 >
                   Reset
                 </button>

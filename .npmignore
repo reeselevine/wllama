@@ -1,9 +1,16 @@
+.npmrc
 /docs
 /wasm
 /examples
 /llama.cpp
 /models
 /build
+/build-*
 /cache
+/compat
+/dev
 /.github
 /.vscode
+/.claude
+a.out.js
+a.out.wasm

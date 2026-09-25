@@ -113,10 +113,46 @@ export const sortFileByShard = (blobs: Blob[]): void => {
   }
 };
 
+export const isMmproj = async (blob: Blob): Promise<boolean> => {
+  const META_NAME = 'general.architecture';
+  const META_VAL = 'clip';
+  const tmp = blob.slice(0, 128 * 1024);
+  const header = await tmp.arrayBuffer();
+
+  const buf = new Uint8Array(header);
+  const nameBytes = new TextEncoder().encode(META_NAME);
+  const valBytes = new TextEncoder().encode(META_VAL);
+
+  // Find offset of META_NAME in buffer
+  let offset = -1;
+  outer: for (let i = 0; i <= buf.length - nameBytes.length; i++) {
+    for (let j = 0; j < nameBytes.length; j++) {
+      if (buf[i + j] !== nameBytes[j]) continue outer;
+    }
+    offset = i;
+    break;
+  }
+  if (offset === -1) return false;
+
+  // Read valLen as uint64 at offset+8*3 (little-endian, read low 32 bits)
+  if (offset + 8 * 4 + 4 > buf.length) return false;
+  const view = new DataView(header);
+  const valLen = view.getBigUint64(offset + 8 * 3, true);
+  if (valLen !== 4n) return false;
+
+  // Read 4 bytes at offset+8*4, compare with META_VAL bytes
+  for (let i = 0; i < valBytes.length; i++) {
+    if (buf[offset + 8 * 4 + i] !== valBytes[i]) return false;
+  }
+  return true;
+};
+
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const absoluteUrl = (relativePath: string) =>
-  new URL(relativePath, document.baseURI).href;
+  typeof document === 'undefined'
+    ? new URL(relativePath, self.location.href).href
+    : new URL(relativePath, document.baseURI).href;
 
 export const padDigits = (number: number, digits: number) => {
   return (
@@ -128,6 +164,49 @@ export const sumArr = (arr: number[]) =>
   arr.reduce((prev, curr) => prev + curr, 0);
 
 export const isString = (value: any): boolean => !!value?.startsWith;
+
+export const MMPROJ_FILE_NAME = 'mmproj.gguf';
+
+type ModelShard = { blob: Blob; name: string };
+export const prepareBlobs = async (
+  blobsInp: Blob[]
+): Promise<{
+  llm: ModelShard[];
+  mmproj: ModelShard | null;
+  all: ModelShard[];
+}> => {
+  const blobs: Blob[] = [];
+  let blobMmproj: Blob | null = null;
+
+  for (const blob of blobsInp) {
+    if (await isMmproj(blob)) {
+      blobMmproj = blob;
+    } else {
+      blobs.push(blob);
+    }
+  }
+
+  // prepare model-XXXXX-of-XXXXX.gguf blobs
+  sortFileByShard(blobs);
+  const result = blobs.map((blob, i) => ({
+    blob,
+    name: `model-${padDigits(i + 1, 5)}-of-${padDigits(blobs.length, 5)}.gguf`,
+  }));
+
+  // prepare mmproj.gguf blob
+  if (blobMmproj) {
+    result.push({
+      blob: blobMmproj,
+      name: MMPROJ_FILE_NAME,
+    });
+  }
+
+  return {
+    llm: result.filter((f) => f.name !== MMPROJ_FILE_NAME),
+    mmproj: blobMmproj ? { blob: blobMmproj, name: MMPROJ_FILE_NAME } : null,
+    all: result,
+  };
+};
 
 /**
  * Browser feature detection
@@ -156,23 +235,6 @@ export const isSupportMultiThread = () =>
   );
 
 /**
- * @returns true if browser supports wasm memory64 via the JS API
- */
-export const isSupportMemory64 = async () => {
-  try {
-    const descriptor: any = {
-      initial: 1n,
-      maximum: 1n,
-      address: 'i64',
-    };
-    new WebAssembly.Memory(descriptor);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
-
-/**
  * @returns true if browser support wasm "native" exception handler
  */
 const isSupportExceptions = async () =>
@@ -195,6 +257,35 @@ const isSupportSIMD = async () =>
   );
 
 /**
+ * @returns true if browser support JSPI
+ */
+export const isSupportJSPI = () => {
+  return !!(WebAssembly as any).Suspending;
+};
+
+/**
+ * @returns true if brower support WebGPU. Note: for browser without JSPI support, compat mode will be used.
+ */
+export const isSupportWebGPU = () => {
+  return !!(navigator as any).gpu;
+};
+
+/**
+ * @returns true if browser support WASM Memory64
+ */
+export const isSupportMem64 = (): boolean => {
+  try {
+    new WebAssembly.Memory({
+      address: 'i64',
+      initial: 1n, // 1 page (64 KiB)
+    } as any);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Throws an error if the environment is not compatible
  */
 export const checkEnvironmentCompatible = async (): Promise<void> => {
@@ -215,6 +306,13 @@ export const isSafari = (): boolean => {
     isSafariMobile() ||
     !!navigator.userAgent.match(/Version\/([0-9\._]+).*Safari/)
   ); // safari
+};
+
+/**
+ * Check if browser is Firefox
+ */
+export const isFirefox = (): boolean => {
+  return !!navigator.userAgent.match(/Firefox\/([0-9\.]+)(?:\s|$)/);
 };
 
 /**
@@ -258,22 +356,32 @@ export const createWorker = (workerCode: string | Blob): Worker => {
 export const cbToAsyncIter =
   <A extends any[], T>(
     fn: (
-      ...args: [...args: A, callback: (val?: T, done?: boolean) => void]
+      ...args: [
+        ...args: A,
+        callback: (val?: T, done?: boolean, err?: Error) => void,
+      ]
     ) => void
   ) =>
   (...args: A): AsyncIterable<T> => {
     let values: Promise<[T, boolean]>[] = [];
     let resolve: (x: [T, boolean]) => void;
+    let reject: (e: Error) => void;
     values.push(
-      new Promise((r) => {
-        resolve = r;
+      new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
       })
     );
-    fn(...args, (val?: T, done?: boolean) => {
+    fn(...args, (val?: T, done?: boolean, err?: Error) => {
+      if (err) {
+        reject(err);
+        return;
+      }
       resolve([val!, done!]);
       values.push(
-        new Promise((r) => {
-          resolve = r;
+        new Promise((res, rej) => {
+          resolve = res;
+          reject = rej;
         })
       );
     });
@@ -286,3 +394,12 @@ export const cbToAsyncIter =
       }
     })();
   };
+
+/**
+ * Check if we can use async file read, where the wasm env can asynchronously read a Blob.
+ * Please refer to README-dev.md for more details.
+ */
+export const canUseAsyncFileRead = (compat: boolean) =>
+  isSupportJSPI() || compat;
+
+export const needCompat = () => !isSupportJSPI() || !isSupportMem64();

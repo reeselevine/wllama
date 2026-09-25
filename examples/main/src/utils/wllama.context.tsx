@@ -6,9 +6,20 @@ import {
   useDidMount,
   WllamaStorage,
 } from './utils';
-import { Model, ModelManager, Wllama } from '@reeselevine/wllama-webgpu';
+import {
+  Model,
+  ModelManager,
+  Wllama,
+  type ResultTimings,
+} from '@wllama/wllama/esm/index.js';
 import { DEFAULT_INFERENCE_PARAMS, WLLAMA_CONFIG_PATHS } from '../config';
-import { InferenceParams, RuntimeInfo, ModelState, Screen } from './types';
+import {
+  InferenceParams,
+  RuntimeInfo,
+  ModelState,
+  Screen,
+  Message,
+} from './types';
 import { verifyCustomModel } from './custom-models';
 import {
   DisplayedModel,
@@ -16,6 +27,18 @@ import {
   getUserAddedModels,
   updateUserAddedModels,
 } from './displayed-model';
+
+function isQuantizedKvCacheType(type?: InferenceParams['cacheTypeV']) {
+  return !!type && !type.startsWith('f');
+}
+
+function normalizeCacheType(value: unknown): InferenceParams['cacheTypeK'] {
+  return ['f32', 'f16', 'q8_0', 'q5_1', 'q5_0', 'q4_1', 'q4_0'].includes(
+    String(value)
+  )
+    ? (value as InferenceParams['cacheTypeK'])
+    : undefined;
+}
 
 interface WllamaContextValue {
   // functions for managing models
@@ -41,10 +64,12 @@ interface WllamaContextValue {
   // functions for chat completion
   getWllamaInstance(): Wllama;
   createCompletion(
-    input: string,
+    input: Message[],
     callback: (piece: string) => void
   ): Promise<void>;
   stopCompletion(): void;
+  timings?: ResultTimings;
+  resetTimings(): void;
   isGenerating: boolean;
   currentConvId: number;
 
@@ -56,11 +81,14 @@ interface WllamaContextValue {
 const WllamaContext = createContext<WllamaContextValue>({} as any);
 
 const modelManager = new ModelManager();
-const newWllamaInstance = (backend: InferenceParams['backend']) =>
-  new Wllama(WLLAMA_CONFIG_PATHS, {
+const newWllamaInstance = () => {
+  const instance = new Wllama(WLLAMA_CONFIG_PATHS, {
     logger: DebugLogger,
-    backend,
+    modelManager,
   });
+  instance.setCompat('default', 'firefox_safari');
+  return instance;
+};
 const getInitialParams = (): InferenceParams => {
   const stored = WllamaStorage.load('params', DEFAULT_INFERENCE_PARAMS);
   return {
@@ -69,15 +97,18 @@ const getInitialParams = (): InferenceParams => {
     // nBatch is not user-configurable in the example UI, so keep it aligned
     // with the current app default instead of reviving stale persisted values.
     nBatch: DEFAULT_INFERENCE_PARAMS.nBatch,
+    cacheTypeK: normalizeCacheType(stored.cacheTypeK),
+    cacheTypeV: normalizeCacheType(stored.cacheTypeV),
   };
 };
-let wllamaInstance = newWllamaInstance(getInitialParams().backend);
-let stopSignal = false;
-const resetWllamaInstance = (backend: InferenceParams['backend']) => {
-  wllamaInstance = newWllamaInstance(backend);
+let wllamaInstance = newWllamaInstance();
+let completionController: AbortController | undefined;
+const resetWllamaInstance = () => {
+  wllamaInstance = newWllamaInstance();
 };
 
 export const WllamaProvider = ({ children }: any) => {
+  const [timings, setTimings] = useState<ResultTimings>();
   const [isGenerating, setGenerating] = useState(false);
   const [currentConvId, setCurrentConvId] = useState(-1);
   const [currScreen, setScreen] = useState<Screen>(getDefaultScreen());
@@ -171,6 +202,15 @@ export const WllamaProvider = ({ children }: any) => {
     if (!model.cachedModel) {
       throw new Error('Model is not in cache');
     }
+    if (
+      isQuantizedKvCacheType(currParams.cacheTypeV) &&
+      currParams.flashAttn === false
+    ) {
+      throw new Error(
+        'Quantized V cache requires Flash Attention. Set Flash Attention to Auto before loading the model.'
+      );
+    }
+    setTimings(undefined);
     setLoadedModel(model.clone({ state: ModelState.LOADING }));
     try {
       if (currParams.backend === 'webgpu' && !(await getWebGPUMemoryBudget())) {
@@ -181,16 +221,23 @@ export const WllamaProvider = ({ children }: any) => {
       await wllamaInstance.loadModel(model.cachedModel, {
         n_threads: currParams.nThreads > 0 ? currParams.nThreads : undefined,
         n_ctx: currParams.nContext,
+        n_gpu_layers: currParams.backend === 'cpu' ? 0 : 99999,
+        n_parallel: 1,
         n_batch: currParams.nBatch,
+        cache_type_k: currParams.cacheTypeK,
+        cache_type_v: currParams.cacheTypeV,
+        flash_attn: currParams.flashAttn,
       });
       setLoadedModel(model.clone({ state: ModelState.LOADED }));
       setCurrRuntimeInfo({
         isMultithread: wllamaInstance.isMultithread(),
-        usingWebGPU: wllamaInstance.usingWebGPU(),
+        usingWebGPU:
+          currParams.backend === 'webgpu' && wllamaInstance.isSupportWebGPU(),
         hasChatTemplate: !!wllamaInstance.getChatTemplate(),
       });
     } catch (e) {
-      resetWllamaInstance(currParams.backend);
+      await wllamaInstance.exit().catch(DebugLogger.error);
+      resetWllamaInstance();
       alert(`Failed to load model: ${(e as any).message ?? 'Unknown error'}`);
       setLoadedModel(undefined);
     }
@@ -199,38 +246,44 @@ export const WllamaProvider = ({ children }: any) => {
   const unloadModel = async () => {
     if (!loadedModel) return;
     await wllamaInstance.exit();
-    resetWllamaInstance(currParams.backend);
+    resetWllamaInstance();
     setLoadedModel(undefined);
     setCurrRuntimeInfo(undefined);
+    setTimings(undefined);
   };
 
   const createCompletion = async (
-    input: string,
+    input: Message[],
     callback: (currentText: string) => void
   ) => {
-    if (isDownloading || !loadedModel || isLoadingModel) return;
+    if (isGenerating || isDownloading || !loadedModel || isLoadingModel) return;
     setGenerating(true);
-    stopSignal = false;
-    const result = await wllamaInstance.createCompletion(input, {
-      nPredict: currParams.nPredict,
-      useCache: true,
-      sampling: {
-        temp: currParams.temperature,
-      },
-      // @ts-ignore unused variable
-      onNewToken(token, piece, currentText, optionals) {
-        callback(currentText);
-        if (stopSignal) optionals.abortSignal();
-      },
-    });
-    callback(result);
-    stopSignal = false;
-    setGenerating(false);
+    setTimings(undefined);
+    completionController = new AbortController();
+    let text = '';
+    try {
+      await wllamaInstance.createChatCompletion({
+        messages: input.map(({ role, content }) => ({ role, content })),
+        max_tokens: currParams.nPredict,
+        temperature: currParams.temperature,
+        stream: true,
+        abortSignal: completionController.signal,
+        onData(chunk) {
+          const delta = chunk.choices[0]?.delta;
+          text += delta?.content ?? '';
+          callback(text);
+          if (chunk.timings) setTimings(chunk.timings);
+        },
+      });
+    } catch (error) {
+      if (!completionController.signal.aborted) throw error;
+    } finally {
+      completionController = undefined;
+      setGenerating(false);
+    }
   };
 
-  const stopCompletion = () => {
-    stopSignal = true;
-  };
+  const stopCompletion = () => completionController?.abort();
 
   const navigateTo = (screen: Screen, conversationId?: number) => {
     setScreen(screen);
@@ -245,7 +298,7 @@ export const WllamaProvider = ({ children }: any) => {
     const next = { ...DEFAULT_INFERENCE_PARAMS, ...val };
     const backendChanged = currParams.backend !== next.backend;
     if (backendChanged && !loadedModel) {
-      resetWllamaInstance(next.backend);
+      resetWllamaInstance();
     }
     WllamaStorage.save('params', next);
     setCurrParams(next);
@@ -301,6 +354,8 @@ export const WllamaProvider = ({ children }: any) => {
         setParams,
         createCompletion,
         stopCompletion,
+        timings,
+        resetTimings: () => setTimings(undefined),
         isGenerating,
         currentConvId,
         navigateTo,

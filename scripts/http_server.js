@@ -28,6 +28,17 @@ if (!process.env.MULTITHREAD) {
   console.log('WARN: Running server without MULTITHREAD=1, this will effectively disable multithreading');
 }
 
+app.get("/", (req, res) => {
+  res.send(`
+    Examples:<br/>
+    <a href="/examples/basic">Basic</a><br/>
+    <a href="/examples/embeddings">Embeddings</a><br/>
+    <a href="/examples/multimodal">Multimodal</a><br/>
+    <a href="/examples/tools">Tools</a><br/>
+    <a href="/examples/test-backend-ops">Test Backend Ops (FOR DEBUGGING ONLY)</a><br/>
+  `);
+});
+
 // Start the server
 const PORT = 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));

@@ -1,10 +1,10 @@
-import WasmFromPackage from '@reeselevine/wllama-webgpu/esm/wasm-from-package.js';
-import wllamaPackageJson from '@reeselevine/wllama-webgpu/package.json';
+import wasmUrl from '@wllama/wllama/esm/wasm/wllama.wasm?url';
+import wllamaPackageJson from '@wllama/wllama/package.json';
 import { InferenceParams } from './utils/types';
 
 export const WLLAMA_VERSION = wllamaPackageJson.version;
 
-export const WLLAMA_CONFIG_PATHS = WasmFromPackage;
+export const WLLAMA_CONFIG_PATHS = { default: wasmUrl };
 
 export const MAX_GGUF_SIZE = 2 * 1024 * 1024 * 1024; // 2GB
 
@@ -58,7 +58,7 @@ export const DEFAULT_INFERENCE_PARAMS: InferenceParams = {
   nBatch: 512,
   temperature: 0.2,
   backend: 'webgpu',
+  cacheTypeK: undefined,
+  cacheTypeV: undefined,
+  flashAttn: undefined,
 };
-
-export const DEFAULT_CHAT_TEMPLATE =
-  "{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content'] + '<|im_end|>' + '\n'}}{% endfor %}{% if add_generation_prompt %}{{ '<|im_start|>assistant\n' }}{% endif %}";

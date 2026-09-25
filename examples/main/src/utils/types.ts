@@ -19,6 +19,15 @@ export interface RuntimeInfo {
   hasChatTemplate: boolean;
 }
 
+export type KvCacheQuantizationType =
+  | 'f32'
+  | 'f16'
+  | 'q8_0'
+  | 'q5_1'
+  | 'q5_0'
+  | 'q4_1'
+  | 'q4_0';
+
 export interface InferenceParams {
   nThreads: number;
   nContext: number;
@@ -26,6 +35,9 @@ export interface InferenceParams {
   temperature: number;
   nPredict: number;
   backend: 'cpu' | 'webgpu';
+  cacheTypeK?: KvCacheQuantizationType;
+  cacheTypeV?: KvCacheQuantizationType;
+  flashAttn?: boolean;
 }
 
 export interface Message {

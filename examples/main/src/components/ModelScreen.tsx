@@ -16,8 +16,9 @@ import {
 import { useEffect, useState } from 'react';
 import ScreenWrapper from './ScreenWrapper';
 import { DisplayedModel } from '../utils/displayed-model';
-import { isValidGgufFile } from '@reeselevine/wllama-webgpu';
-import { benchmark, perplexity } from '../utils/benchmark';
+import { isValidGgufFile } from '@wllama/wllama/esm/index.js';
+import { benchmark } from '../utils/benchmark';
+import type { KvCacheQuantizationType } from '../utils/types';
 
 type BenchmarkResultTable = {
   headers: string[];
@@ -25,6 +26,22 @@ type BenchmarkResultTable = {
 };
 
 const SPLIT_GGUF_REGEX = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/;
+const KV_CACHE_TYPE_OPTIONS: Array<{
+  value: KvCacheQuantizationType;
+  label: string;
+}> = [
+  { value: 'f16', label: 'f16' },
+  { value: 'f32', label: 'f32' },
+  { value: 'q8_0', label: 'q8_0' },
+  { value: 'q5_1', label: 'q5_1' },
+  { value: 'q5_0', label: 'q5_0' },
+  { value: 'q4_1', label: 'q4_1' },
+  { value: 'q4_0', label: 'q4_0' },
+];
+
+function isQuantizedKvCacheType(type?: KvCacheQuantizationType) {
+  return !!type && !type.startsWith('f');
+}
 
 function parseSplitFile(file: string) {
   const match = file.match(SPLIT_GGUF_REGEX);
@@ -88,6 +105,9 @@ export default function ModelScreen() {
   const effectiveWebGPUMemoryBudget = webgpuMemoryBudget
     ? Math.floor(webgpuMemoryBudget * 0.8)
     : undefined;
+  const quantizedVCacheWithFlashDisabled =
+    isQuantizedKvCacheType(currParams.cacheTypeV) &&
+    currParams.flashAttn === false;
 
   useEffect(() => {
     let cancelled = false;
@@ -147,30 +167,23 @@ export default function ModelScreen() {
       }));
     };
 
-  const runBenchmarkAction = async (action: 'benchmark' | 'perplexity') => {
+  const runBenchmarkAction = async () => {
     if (benchmarkBlocked || !loadedModel) return;
     setBenchmarkBusy(true);
     setBenchmarkError(null);
     setBenchmarkOutput(null);
     try {
-      const result =
-        action === 'benchmark'
-          ? await benchmark(
-              getWllamaInstance(),
-              loadedModel.hfModel,
-              currParams
-            )
-          : await perplexity(
-              getWllamaInstance(),
-              loadedModel.hfModel,
-              currParams
-            );
+      const result = await benchmark(
+        getWllamaInstance(),
+        loadedModel.hfModel,
+        currParams
+      );
       setBenchmarkOutput({
         headers: result.output[0],
         rows: result.output.slice(2),
       });
     } catch (e) {
-      setBenchmarkError((e as any)?.message ?? `Failed to run ${action}`);
+      setBenchmarkError((e as any)?.message ?? 'Failed to run benchmark');
     } finally {
       setBenchmarkBusy(false);
     }
@@ -252,6 +265,86 @@ export default function ModelScreen() {
           <span className="label-text">Use WebGPU backend</span>
         </label>
 
+        <label className="flex flex-col gap-2 mb-2">
+          <span className="text-sm">KV cache type K</span>
+          <select
+            className="select select-bordered w-full"
+            value={currParams.cacheTypeK ?? ''}
+            onChange={(e) =>
+              setParams({
+                ...currParams,
+                cacheTypeK: (e.target.value || undefined) as
+                  | KvCacheQuantizationType
+                  | undefined,
+              })
+            }
+            disabled={blockModelBtn}
+          >
+            <option value="">Default (f16)</option>
+            {KV_CACHE_TYPE_OPTIONS.map((option) => (
+              <option key={`k-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-2 mb-2">
+          <span className="text-sm">KV cache type V</span>
+          <select
+            className="select select-bordered w-full"
+            value={currParams.cacheTypeV ?? ''}
+            onChange={(e) =>
+              setParams({
+                ...currParams,
+                cacheTypeV: (e.target.value || undefined) as
+                  | KvCacheQuantizationType
+                  | undefined,
+              })
+            }
+            disabled={blockModelBtn}
+          >
+            <option value="">Default (f16)</option>
+            {KV_CACHE_TYPE_OPTIONS.map((option) => (
+              <option key={`v-${option.value}`} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-2 mb-2">
+          <span className="text-sm">Flash Attention</span>
+          <select
+            className="select select-bordered w-full"
+            value={currParams.flashAttn === false ? 'disabled' : 'auto'}
+            onChange={(e) =>
+              setParams({
+                ...currParams,
+                flashAttn: e.target.value === 'disabled' ? false : undefined,
+              })
+            }
+            disabled={blockModelBtn}
+          >
+            <option value="auto">Auto</option>
+            <option value="disabled">Disabled</option>
+          </select>
+        </label>
+
+        <div className="text-xs opacity-80 mb-2">
+          Quantized KV cache types reduce memory use. Quantized V cache requires
+          Flash Attention.
+        </div>
+
+        {quantizedVCacheWithFlashDisabled && (
+          <div className="alert alert-warning mb-2">
+            <span>
+              Quantized V cache is not supported when Flash Attention is
+              disabled.
+            </span>
+          </div>
+        )}
+
         {currParams.backend === 'webgpu' && effectiveWebGPUMemoryBudget && (
           <div className="text-sm opacity-80 mb-2">
             Usable WebGPU Budget:{' '}
@@ -286,13 +379,13 @@ export default function ModelScreen() {
         <div className="mt-6 rounded-box border border-base-300 p-4">
           <h2 className="text-xl mb-2">Benchmark</h2>
           <p className="text-sm opacity-80 mb-3">
-            Runs against the currently loaded model. Prefill is run with 512
-            tokens and decode with 64 tokens. Each test does 1 warmup run and 3
-            measured runs.
+            Runs real completions with up to 64 generated tokens: 1 warmup and 3
+            measured runs. Reports upstream prompt and decode timings; results
+            are not comparable to the old synthetic benchmark.
           </p>
           {!loadedModel && (
             <p className="text-sm opacity-80 mb-3">
-              Load a model first to run benchmark or perplexity.
+              Load a model first to run the benchmark.
             </p>
           )}
           {benchmarkError && (
@@ -304,16 +397,9 @@ export default function ModelScreen() {
             <button
               className="btn btn-sm btn-outline"
               disabled={benchmarkBlocked}
-              onClick={() => runBenchmarkAction('benchmark')}
+              onClick={runBenchmarkAction}
             >
               {benchmarkBusy ? 'Running...' : 'Run benchmark'}
-            </button>
-            <button
-              className="btn btn-sm btn-outline"
-              disabled={benchmarkBlocked}
-              onClick={() => runBenchmarkAction('perplexity')}
-            >
-              {benchmarkBusy ? 'Running...' : 'Run perplexity'}
             </button>
           </div>
           {benchmarkOutput && (
@@ -606,7 +692,7 @@ function ModelCard({
               />
               &nbsp;&nbsp;&nbsp;&nbsp;
               <InfoOnOffDisplay
-                text="WebGPU"
+                text="WebGPU requested"
                 on={currRuntimeInfo.usingWebGPU}
               />
               &nbsp;&nbsp;&nbsp;&nbsp;

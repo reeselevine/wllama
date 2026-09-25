@@ -1,10 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 project("wllama")
 
-option(GGML_WEBGPU "Enable GGML WebGPU backend" ON)
-option(GGML_WEBGPU_JSPI "Enable GGML WebGPU JSPI support" ON)
-option(LLAMA_WASM_MEM64 "Enable 64-bit memory for WebAssembly builds" OFF)
-add_subdirectory(llama.cpp)
+option(WLLAMA_TEST_BACKEND "Build wllama with test-backend-ops included" OFF)
+
+set(MTMD_VIDEO OFF CACHE BOOL "" FORCE)
 
 set(CMAKE_THREAD_LIBS_INIT "-lpthread")
 set(CMAKE_HAVE_THREADS_LIBRARY 1)
@@ -12,16 +11,123 @@ set(CMAKE_USE_WIN32_THREADS_INIT 0)
 set(CMAKE_USE_PTHREADS_INIT 1)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
-set(WLLAMA_SRC cpp/wllama.cpp
-    cpp/actions.hpp
+set(WLLAMA_COMPILE_OPTIONS
+    -O3 -msimd128 -DNDEBUG
+    # -flto=full # note: this breaks things, better to disable
+    -frtti
+    -pthread
+    -gsource-map
+)
+set(WLLAMA_LINK_OPTIONS
+    # -flto=full # note: this breaks things, better to disable
+    --no-entry
+    -sEXPORT_ES6=0
+    -sMODULARIZE=0
+    -sINITIAL_MEMORY=128MB
+    -sMAXIMUM_MEMORY=4096MB
+    -sSTACK_SIZE=5MB
+    -sALLOW_MEMORY_GROWTH=1
+    -sFORCE_FILESYSTEM=1
+    -sEXPORTED_FUNCTIONS=_main,_wllama_malloc,_wllama_start,_wllama_action,_wllama_exit,_wllama_debug
+    -sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPU8,MEMFS,FS,mmapAlloc,ENV,wasmMemory
+    -sNO_EXIT_RUNTIME=1
+    -sIMPORTED_MEMORY=1
+    -sPTHREAD_POOL_SIZE=Module[\"pthreadPoolSize\"]
+    -sUSE_PTHREADS=1
+    -pthread
+    -gsource-map
+    --emit-symbol-map
+    -Wl,--wrap,fopen
+    -Wl,--wrap,fclose
+    -Wl,--wrap,fread
+    -Wl,--wrap,fseek
+    -Wl,--wrap,ftell
+    -Wl,--wrap,abort
+    -Wl,--wrap,ggml_graph_plan # for test-backend-ops
+)
+
+if (WLLAMA_COMPAT)
+    # no wasm exception (not compatible with asyncify - asyncify is needed for firefox and safari)
+    # no mem64 (not compatible with safari)
+    list(APPEND WLLAMA_COMPILE_OPTIONS
+        -fexceptions
+        -pthread
+    )
+    list(APPEND WLLAMA_LINK_OPTIONS
+        -fexceptions
+        -sASYNCIFY=1
+        -sASYNCIFY_ADD=['wllama_start','wllama_action']
+    )
+else()
+    list(APPEND WLLAMA_COMPILE_OPTIONS
+        -sMEMORY64=1
+        -fwasm-exceptions
+    )
+    list(APPEND WLLAMA_LINK_OPTIONS
+        -sMEMORY64=1
+        -fwasm-exceptions
+        -sJSPI
+        -sJSPI_EXPORTS=['wllama_start','wllama_action']
+    )
+endif()
+
+add_compile_options(${WLLAMA_COMPILE_OPTIONS})
+add_link_options(${WLLAMA_LINK_OPTIONS})
+
+add_subdirectory(llama.cpp)
+
+set(LLAMA_INSTALL_VERSION 0.0.${LLAMA_BUILD_NUMBER})
+add_subdirectory(llama.cpp/tools/mtmd)
+
+file(GLOB_RECURSE LLAMA_COMMON_SRC
+    CONFIGURE_DEPENDS
+    llama.cpp/common/*.cpp
+    llama.cpp/common/*.h
+    llama.cpp/common/*.hpp
+    llama.cpp/common/jinja/*.cpp
+    llama.cpp/common/jinja/*.h
+)
+
+list(REMOVE_ITEM LLAMA_COMMON_SRC
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/arg.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/console.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/debug.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/fit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/hf-cache.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/log.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/preset.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common/download.cpp
+)
+
+set(LLAMA_SERVER_SRC llama.cpp/tools/server/server-context.cpp
+    llama.cpp/tools/server/server-task.cpp
+    llama.cpp/tools/server/server-chat.cpp
+    llama.cpp/tools/server/server-common.cpp
+    llama.cpp/tools/server/server-schema.cpp
+    llama.cpp/tools/server/server-stream.cpp
+)
+
+set(WLLAMA_SRC ${LLAMA_COMMON_SRC} ${LLAMA_SERVER_SRC}
+    cpp/wllama.cpp
     cpp/glue.hpp
-    cpp/helpers/wlog.cpp
-    cpp/helpers/wcommon.cpp
-    cpp/helpers/wsampling.cpp
     llama.cpp/include/llama.h)
+
+if(WLLAMA_TEST_BACKEND)
+    message(WARNING "Building wllama with test-backend-ops included")
+    set(TEST_BACKEND_OPS_SRC ${CMAKE_CURRENT_BINARY_DIR}/test-backend-ops.cpp)
+    file(READ ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/tests/test-backend-ops.cpp TEST_BACKEND_OPS_CONTENT)
+    string(REPLACE "int main(" "int main_test_backend_ops(" TEST_BACKEND_OPS_CONTENT "${TEST_BACKEND_OPS_CONTENT}")
+    file(WRITE ${TEST_BACKEND_OPS_SRC} "${TEST_BACKEND_OPS_CONTENT}")
+    list(APPEND WLLAMA_SRC ${TEST_BACKEND_OPS_SRC})
+    add_compile_definitions(WLLAMA_TEST_BACKEND)
+endif()
+
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cpp)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/cpp/helpers)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/include)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/common)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/vendor)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/tools/server)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/tools/mtmd)
 
 add_executable(wllama ${WLLAMA_SRC})
-target_link_libraries(wllama PRIVATE ggml llama ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(wllama PRIVATE ggml llama mtmd ${CMAKE_THREAD_LIBS_INIT})
