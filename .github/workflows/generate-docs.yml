@@ -27,6 +27,7 @@ concurrency:
 jobs:
   # Build job
   build:
+    if: github.repository == 'ngxson/wllama'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

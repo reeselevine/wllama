@@ -30,7 +30,13 @@ Cross-Origin-Embedder-Policy: require-corp
 
 Development and `npm run preview` set these headers automatically. Serve `.wasm`
 files with `application/wasm`. The app uses relative asset paths for subdirectory
-hosting. The examples/main deployment workflow now builds only this app.
+hosting.
+
+## GitHub Pages
+
+The `Deploy wllama app to GitHub Pages` workflow builds only this app and publishes `dist/` to the root of the `gh-pages` branch. Run it manually from the Actions tab with `master` selected after pushing changes. It serves the app at `https://reeselevine.github.io/wllama/`; do not add another `wllama` directory to the deployment output.
+
+The repository's Pages settings should use `Deploy from a branch`, branch `gh-pages`, folder `/(root)`. The upstream docs deployment is restricted to `ngxson/wllama` so it cannot replace this app's deployment. These settings are configured on GitHub, not by the workflow.
 
 ## Changes from the fork
 
@@ -46,6 +52,5 @@ hosting. The examples/main deployment workflow now builds only this app.
   reporting prompt/decode speeds. It is not comparable to the fork's synthetic
   pp512/tg64 tests. The perplexity control was removed because upstream removed that API.
 
-The old library sources remain in the repository for reference; the app no
-longer links to them. To update upstream, install a new explicit package version,
+The library sources outside this app follow upstream; the app uses the published package instead. To update the app's library, install a new explicit package version,
 review its API changes, and rebuild the app.

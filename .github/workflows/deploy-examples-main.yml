@@ -1,0 +1,41 @@
+name: Deploy wllama app to GitHub Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-app
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.repository == 'reeselevine/wllama' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: examples/main/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci
+        working-directory: examples/main
+
+      - name: Build app
+        run: npm run build
+        working-directory: examples/main
+
+      - name: Deploy examples/main to gh-pages
+        uses: JamesIves/github-pages-deploy-action@9d877eea73427180ae43cf98e8914934fe157a1a
+        with:
+          branch: gh-pages
+          folder: examples/main/dist
+          clean: true
