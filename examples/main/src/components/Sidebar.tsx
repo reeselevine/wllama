@@ -12,9 +12,14 @@ import {
 import { WLLAMA_VERSION } from '../config';
 
 export default function Sidebar({ children }: { children: any }) {
-  const { currentConvId, navigateTo, currScreen, loadedModel } = useWllama();
-  const { conversations, getConversationById, deleteConversation } =
-    useMessages();
+  const { currentConvId, navigateTo, currScreen, loadedModel, isGenerating } =
+    useWllama();
+  const {
+    conversations,
+    getConversationById,
+    deleteConversation,
+    deleteAllConversations,
+  } = useMessages();
 
   const currConv = getConversationById(currentConvId);
 
@@ -82,6 +87,25 @@ export default function Sidebar({ children }: { children: any }) {
             )}
 
             <ul className="menu gap-1">
+              <li>
+                <button
+                  type="button"
+                  className="text-error disabled:opacity-50"
+                  disabled={conversations.length === 0 || isGenerating}
+                  onClick={() => {
+                    if (
+                      confirm(
+                        'Delete all conversations? This cannot be undone.'
+                      )
+                    ) {
+                      deleteAllConversations();
+                      navigateTo(Screen.CHAT);
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon={faTrashAlt} /> Delete all conversations
+                </button>
+              </li>
               <li onClick={() => navigateTo(Screen.GUIDE)}>
                 <a className={currScreen === Screen.GUIDE ? 'active' : ''}>
                   <FontAwesomeIcon icon={faQuestionCircle} /> Guide

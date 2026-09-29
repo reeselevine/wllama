@@ -6,6 +6,7 @@ interface MessagesContextValue {
   conversations: Conversation[];
   newConversation: (message: Message) => Conversation;
   deleteConversation: (id: number) => void;
+  deleteAllConversations: () => void;
   addMessageToConversation: (id: number, message: Message) => void;
   getConversationById: (id: number) => Conversation | undefined;
   editMessageInConversation: (
@@ -107,6 +108,7 @@ export const MessagesProvider = ({ children }: any) => {
         conversations: sortedConversations,
         newConversation,
         deleteConversation,
+        deleteAllConversations: () => setConversations(() => ({})),
         addMessageToConversation,
         getConversationById,
         editMessageInConversation,
