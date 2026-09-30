@@ -192,7 +192,9 @@ export default function ChatScreen() {
               </label>
             </div>
             <p className="text-xs opacity-70 mb-2">
-              {'Requires model support. Weather queries send the requested location to Open-Meteo; no API key is needed.'}
+              {
+                'Requires model support. Weather queries send the requested location to Open-Meteo; no API key is needed.'
+              }
             </p>
             <textarea
               className="textarea textarea-bordered w-full"

@@ -251,7 +251,12 @@
       </button>
     </div>
 
-    <p>Live weather from <a href="https://open-meteo.com/" style="color: #8df">Open-Meteo</a>. No API key needed for this noncommercial demo. Forecasts cover the next 7 days.</p>
+    <p>
+      Live weather from
+      <a href="https://open-meteo.com/" style="color: #8df">Open-Meteo</a>. No
+      API key needed for this noncommercial demo. Forecasts cover the next 7
+      days.
+    </p>
 
     <textarea
       id="input_prompt"
@@ -391,12 +396,19 @@
               const locationData = await locationResponse.json();
               const places = locationData.results ?? [];
               const cityName = args.city.split(',')[0].trim().toLowerCase();
-              const exactMatches = places.filter((place) => place.name.toLowerCase() === cityName);
+              const exactMatches = places.filter(
+                (place) => place.name.toLowerCase() === cityName
+              );
               const matches = exactMatches.length ? exactMatches : places;
               if (matches.length > 1) {
                 return {
-                  error: 'Multiple locations match. Retry with the state or country from the user request. If unspecified, ask the user to choose.',
-                  candidates: matches.map((place) => [place.name, place.admin1, place.country].filter(Boolean).join(', ')),
+                  error:
+                    'Multiple locations match. Retry with the state or country from the user request. If unspecified, ask the user to choose.',
+                  candidates: matches.map((place) =>
+                    [place.name, place.admin1, place.country]
+                      .filter(Boolean)
+                      .join(', ')
+                  ),
                 };
               }
               const location = matches[0];
@@ -445,7 +457,10 @@
                 },
                 forecast: data.daily.time.map((date, i) => ({
                   date,
-                  weekday: new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+                  weekday: new Date(date + 'T12:00:00Z').toLocaleDateString(
+                    'en-US',
+                    { weekday: 'long', timeZone: 'UTC' }
+                  ),
                   low: data.daily.temperature_2m_min[i],
                   high: data.daily.temperature_2m_max[i],
                   rain_probability: data.daily.precipitation_probability_max[i],

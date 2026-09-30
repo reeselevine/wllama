@@ -263,7 +263,14 @@ export const WllamaProvider = ({ children }: any) => {
     setTimings(undefined);
     completionController = new AbortController();
     try {
-      await completeChat(wllamaInstance, input, currParams, completionController.signal, callback, setTimings);
+      await completeChat(
+        wllamaInstance,
+        input,
+        currParams,
+        completionController.signal,
+        callback,
+        setTimings
+      );
     } finally {
       completionController = undefined;
       setGenerating(false);
