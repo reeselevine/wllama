@@ -1,3 +1,5 @@
+import type { ChatCompletionMessage } from '@wllama/wllama/esm/index.js';
+
 export enum Screen {
   GUIDE,
   CHAT,
@@ -38,11 +40,19 @@ export interface InferenceParams {
   cacheTypeK?: KvCacheQuantizationType;
   cacheTypeV?: KvCacheQuantizationType;
   flashAttn?: boolean;
+  enableThinking: boolean;
+  enableWeather: boolean;
 }
 
-export interface Message {
-  id: number;
+export interface MessageUpdate {
   content: string;
+  reasoning?: string;
+  toolMessages?: ChatCompletionMessage[];
+  status?: string;
+}
+
+export interface Message extends MessageUpdate {
+  id: number;
   role: 'system' | 'user' | 'assistant';
 }
 

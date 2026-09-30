@@ -19,7 +19,9 @@ import {
   ModelState,
   Screen,
   Message,
+  MessageUpdate,
 } from './types';
+import { completeChat } from './chat-completion';
 import { verifyCustomModel } from './custom-models';
 import {
   DisplayedModel,
@@ -65,7 +67,7 @@ interface WllamaContextValue {
   getWllamaInstance(): Wllama;
   createCompletion(
     input: Message[],
-    callback: (piece: string) => void
+    callback: (update: MessageUpdate) => void
   ): Promise<void>;
   stopCompletion(): void;
   timings?: ResultTimings;
@@ -254,29 +256,14 @@ export const WllamaProvider = ({ children }: any) => {
 
   const createCompletion = async (
     input: Message[],
-    callback: (currentText: string) => void
+    callback: (update: MessageUpdate) => void
   ) => {
     if (isGenerating || isDownloading || !loadedModel || isLoadingModel) return;
     setGenerating(true);
     setTimings(undefined);
     completionController = new AbortController();
-    let text = '';
     try {
-      await wllamaInstance.createChatCompletion({
-        messages: input.map(({ role, content }) => ({ role, content })),
-        max_tokens: currParams.nPredict,
-        temperature: currParams.temperature,
-        stream: true,
-        abortSignal: completionController.signal,
-        onData(chunk) {
-          const delta = chunk.choices[0]?.delta;
-          text += delta?.content ?? '';
-          callback(text);
-          if (chunk.timings) setTimings(chunk.timings);
-        },
-      });
-    } catch (error) {
-      if (!completionController.signal.aborted) throw error;
+      await completeChat(wllamaInstance, input, currParams, completionController.signal, callback, setTimings);
     } finally {
       completionController = undefined;
       setGenerating(false);

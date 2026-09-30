@@ -19,6 +19,8 @@ export default function ChatScreen() {
     timings,
     resetTimings,
     stopCompletion,
+    currParams,
+    setParams,
   } = useWllama();
   const {
     getConversationById,
@@ -32,7 +34,7 @@ export default function ChatScreen() {
   const currConv = getConversationById(currentConvId);
 
   const onSubmit = async () => {
-    if (isGenerating) return;
+    if (isGenerating || !input.trim()) return;
 
     // copy input and create messages
     const currHistory = currConv?.messages ?? [];
@@ -68,8 +70,8 @@ export default function ChatScreen() {
       throw new Error('loadedModel is null');
     }
     try {
-      await createCompletion([...currHistory, userMsg], (newContent) => {
-        editMessageInConversation(convId, assistantMsg.id, newContent);
+      await createCompletion([...currHistory, userMsg], (update) => {
+        editMessageInConversation(convId, assistantMsg.id, update);
       });
     } catch (error) {
       alert(`Generation failed: ${(error as Error).message}`);
@@ -95,8 +97,40 @@ export default function ChatScreen() {
               ) : (
                 <div className="chat chat-start" key={msg.id}>
                   <div className="chat-bubble bg-base-100 text-base-content">
-                    {msg.content.length === 0 && isGenerating && (
-                      <span className="loading loading-dots"></span>
+                    {msg.reasoning && (
+                      <details className="mb-3">
+                        <summary className="cursor-pointer text-sm opacity-70">
+                          Reasoning
+                        </summary>
+                        <MarkdownMessage content={msg.reasoning} />
+                      </details>
+                    )}
+                    {msg.toolMessages
+                      ?.filter((message) => message.role === 'tool')
+                      .map((message, index) => (
+                        <details className="mb-3" key={index}>
+                          <summary className="cursor-pointer text-sm opacity-70">
+                            Weather result
+                          </summary>
+                          <pre className="text-xs whitespace-pre-wrap break-words">
+                            {typeof message.content === 'string'
+                              ? message.content
+                              : ''}
+                          </pre>
+                          <a
+                            className="link text-xs"
+                            href="https://open-meteo.com/"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Weather data by Open-Meteo
+                          </a>
+                        </details>
+                      ))}
+                    {msg.status && (
+                      <p className="text-sm opacity-70" role="status">
+                        {msg.status}
+                      </p>
                     )}
                     {msg.content.length > 0 && (
                       <MarkdownMessage content={msg.content} />
@@ -125,6 +159,41 @@ export default function ChatScreen() {
 
         {loadedModel && (
           <>
+            <div className="flex flex-wrap gap-4 mb-2">
+              <label className="label cursor-pointer gap-2">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm toggle-primary"
+                  checked={currParams.enableThinking}
+                  disabled={isGenerating}
+                  onChange={(e) =>
+                    setParams({
+                      ...currParams,
+                      enableThinking: e.target.checked,
+                    })
+                  }
+                />
+                <span className="label-text">Enable reasoning</span>
+              </label>
+              <label className="label cursor-pointer gap-2">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm toggle-primary"
+                  checked={currParams.enableWeather}
+                  disabled={isGenerating}
+                  onChange={(e) =>
+                    setParams({
+                      ...currParams,
+                      enableWeather: e.target.checked,
+                    })
+                  }
+                />
+                <span className="label-text">Weather tool</span>
+              </label>
+            </div>
+            <p className="text-xs opacity-70 mb-2">
+              {'Requires model support. Weather queries send the requested location to Open-Meteo; no API key is needed.'}
+            </p>
             <textarea
               className="textarea textarea-bordered w-full"
               placeholder="Your message..."

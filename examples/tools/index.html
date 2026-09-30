@@ -227,6 +227,12 @@
 
     Demo prompts:<br />
     <div class="demo-prompts">
+      <button
+        class="demo-btn"
+        data-prompt="Which day this weekend looks better for a bike ride in Berkeley, California? Compare rain, temperature, and wind."
+      >
+        Plan a bike ride
+      </button>
       <button class="demo-btn" data-prompt="What is 1234 multiplied by 5678?">
         Calculator
       </button>
@@ -244,6 +250,8 @@
         Control lamp
       </button>
     </div>
+
+    <p>Live weather from <a href="https://open-meteo.com/" style="color: #8df">Open-Meteo</a>. No API key needed for this noncommercial demo. Forecasts cover the next 7 days.</p>
 
     <textarea
       id="input_prompt"
@@ -311,13 +319,14 @@
           function: {
             name: 'get_weather',
             description:
-              'Get the current weather for a given city. Note: always returns rain at 21°C regardless of city.',
+              'Get live current weather and a 7-day daily forecast for a city from Open-Meteo. Includes temperature, rain probability, and wind. Returns the matched location; check it against the requested place.',
             parameters: {
               type: 'object',
               properties: {
                 city: {
                   type: 'string',
-                  description: 'Name of the city, e.g. "Tokyo".',
+                  description:
+                    'City with the state or country specified by the user, e.g. "Santa Cruz, CA", "Berkeley, California", or "Paris, France". Preserve the location qualifier.',
                 },
               },
               required: ['city'],
@@ -346,7 +355,7 @@
 
       // ── Tool executors ────────────────────────────────────────────────────
 
-      function executeTool(name, args) {
+      async function executeTool(name, args) {
         switch (name) {
           case 'calculator': {
             try {
@@ -359,12 +368,94 @@
             }
           }
           case 'get_weather': {
-            return {
-              city: args.city,
-              condition: 'rain',
-              temperature_celsius: 21,
-              note: 'This is a simulated result — always returns rain at 21°C.',
-            };
+            if (typeof args.city !== 'string' || !args.city.trim()) {
+              return { error: 'Provide a city name.' };
+            }
+            try {
+              const search = new URL(
+                'https://geocoding-api.open-meteo.com/v1/search'
+              );
+              search.search = new URLSearchParams({
+                name: args.city.trim(),
+                count: '10',
+                language: 'en',
+                format: 'json',
+              });
+              const locationResponse = await fetch(search, {
+                signal: AbortSignal.timeout(15000),
+              });
+              if (!locationResponse.ok)
+                throw new Error(
+                  `Location search returned HTTP ${locationResponse.status}.`
+                );
+              const locationData = await locationResponse.json();
+              const places = locationData.results ?? [];
+              const cityName = args.city.split(',')[0].trim().toLowerCase();
+              const exactMatches = places.filter((place) => place.name.toLowerCase() === cityName);
+              const matches = exactMatches.length ? exactMatches : places;
+              if (matches.length > 1) {
+                return {
+                  error: 'Multiple locations match. Retry with the state or country from the user request. If unspecified, ask the user to choose.',
+                  candidates: matches.map((place) => [place.name, place.admin1, place.country].filter(Boolean).join(', ')),
+                };
+              }
+              const location = matches[0];
+              if (!location)
+                return {
+                  error: `No location found for "${args.city}". Try a nearby city.`,
+                };
+
+              const forecast = new URL(
+                'https://api.open-meteo.com/v1/forecast'
+              );
+              forecast.search = new URLSearchParams({
+                latitude: location.latitude,
+                longitude: location.longitude,
+                current: 'temperature_2m,precipitation,wind_speed_10m',
+                daily:
+                  'temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max',
+                timezone: 'auto',
+                forecast_days: '7',
+              });
+              const response = await fetch(forecast, {
+                signal: AbortSignal.timeout(15000),
+              });
+              if (!response.ok)
+                throw new Error(
+                  `Weather request returned HTTP ${response.status}.`
+                );
+              const data = await response.json();
+              return {
+                source: 'https://open-meteo.com/',
+                location: [location.name, location.admin1, location.country]
+                  .filter(Boolean)
+                  .join(', '),
+                timezone: data.timezone,
+                units: {
+                  temperature: 'C',
+                  precipitation: 'mm',
+                  wind: 'km/h',
+                  rain_probability: '%',
+                },
+                current: {
+                  time: data.current.time,
+                  temperature: data.current.temperature_2m,
+                  precipitation: data.current.precipitation,
+                  wind: data.current.wind_speed_10m,
+                },
+                forecast: data.daily.time.map((date, i) => ({
+                  date,
+                  weekday: new Date(date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+                  low: data.daily.temperature_2m_min[i],
+                  high: data.daily.temperature_2m_max[i],
+                  rain_probability: data.daily.precipitation_probability_max[i],
+                  precipitation: data.daily.precipitation_sum[i],
+                  max_wind: data.daily.wind_speed_10m_max[i],
+                })),
+              };
+            } catch (err) {
+              return { error: `Could not get live weather: ${err.message}` };
+            }
           }
           case 'control_lamp': {
             lampState = args.state;
@@ -477,7 +568,13 @@
 
         addMessage('user', userPrompt);
 
-        const messages = [{ role: 'user', content: userPrompt }];
+        const messages = [
+          {
+            role: 'system',
+            content: `Today is ${new Date().toLocaleDateString('en-CA')} (${new Intl.DateTimeFormat().resolvedOptions().timeZone}). Always call get_weather before answering weather questions. Use only returned data, include units, and report errors honestly. Weekend means Saturday and Sunday. Low rain probability means rain is unlikely. Keep answers concise.`,
+          },
+          { role: 'user', content: userPrompt },
+        ];
 
         try {
           let iterations = 0;
@@ -495,7 +592,7 @@
             const stream = await wllama.createChatCompletion({
               messages,
               tools: TOOLS,
-              tool_choice: 'auto',
+              tool_choice: iterations === 1 ? 'required' : 'auto',
               max_tokens: 512,
               temperature: 0.1,
               stream: true,
@@ -573,7 +670,7 @@
                 });
 
                 setSpinner(true, `Executing tool: ${tc.name}…`);
-                const result = executeTool(tc.name, fnArgs);
+                const result = await executeTool(tc.name, fnArgs);
 
                 addMessage('tool_result', {
                   tool_call_id: tc.id,
@@ -622,6 +719,7 @@
         }
         try {
           await wllama.loadModelFromHF(MODEL_HF, {
+            n_ctx: 4096,
             progressCallback: ({ loaded, total }) => {
               const pct = total > 0 ? Math.round((loaded / total) * 100) : 0;
               setStatus(`Downloading… ${pct}%`);
@@ -653,7 +751,7 @@
           wllama.setCompat('default');
         }
         try {
-          await wllama.loadModel([file]);
+          await wllama.loadModel([file], { n_ctx: 4096 });
           setStatus('Model loaded!');
           setRunDisabled(false);
         } catch (err) {

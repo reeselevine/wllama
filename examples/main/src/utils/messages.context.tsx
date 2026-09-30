@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import { Conversation, Message } from './types';
+import { Conversation, Message, MessageUpdate } from './types';
 import { WllamaStorage } from './utils';
 
 interface MessagesContextValue {
@@ -12,7 +12,7 @@ interface MessagesContextValue {
   editMessageInConversation: (
     conversationId: number,
     messageId: number,
-    content: string
+    update: MessageUpdate
   ) => void;
 }
 
@@ -80,7 +80,7 @@ export const MessagesProvider = ({ children }: any) => {
   const editMessageInConversation = (
     conversationId: number,
     messageId: number,
-    content: string
+    update: MessageUpdate
   ) => {
     setConversations((prevConversations) => {
       if (prevConversations[conversationId]) {
@@ -88,7 +88,7 @@ export const MessagesProvider = ({ children }: any) => {
         const conv = newConversations[conversationId];
         const updatedMessages = conv.messages.map((message) => {
           if (message.id === messageId) {
-            return { ...message, content };
+            return { ...message, ...update };
           }
           return message;
         });

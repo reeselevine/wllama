@@ -45,6 +45,8 @@ The repository's Pages settings should use `Deploy from a branch`, branch `gh-pa
 - Chat templates and streaming are handled by upstream's chat completion API.
   Stop cancels the request. Prefill/decode speeds show the latest response timings;
   Reset clears the displayed timings.
+- Chat has saved toggles for reasoning and the weather tool, both off by default. Reasoning uses the model's `enable_thinking` template option and appears in a collapsible section. Models must support the selected features; the toggles apply to the next message without reloading the model.
+- The weather tool requests current conditions and a 7-day forecast directly from Open-Meteo, with no key for noncommercial use. Include a state or country, for example "Santa Cruz, CA". Tool results are saved with the conversation and reused for follow-up questions. Stop cancels both generation and weather requests.
 - Context, threads, temperature, supported KV cache types, and Flash Attention
   controls remain. Saved `bf16` and `iq4_nl` cache selections fall back to Auto
   because upstream's API does not support those values.
@@ -54,3 +56,5 @@ The repository's Pages settings should use `Deploy from a branch`, branch `gh-pa
 
 The library sources outside this app follow upstream; the app uses the published package instead. To update the app's library, install a new explicit package version,
 review its API changes, and rebuild the app.
+
+Run the chat and weather regression checks from the repository root with `npx playwright test examples/main/tests/chat-completion.spec.ts --workers=1` after installing the root development dependencies.

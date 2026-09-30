@@ -61,4 +61,6 @@ export const DEFAULT_INFERENCE_PARAMS: InferenceParams = {
   cacheTypeK: undefined,
   cacheTypeV: undefined,
   flashAttn: undefined,
+  enableThinking: false,
+  enableWeather: false,
 };
