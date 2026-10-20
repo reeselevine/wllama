@@ -12,7 +12,11 @@ import {
   Wllama,
   type ResultTimings,
 } from '@wllama/wllama/esm/index.js';
-import { DEFAULT_INFERENCE_PARAMS, WLLAMA_CONFIG_PATHS } from '../config';
+import {
+  DEFAULT_INFERENCE_PARAMS,
+  WLLAMA_CONFIG_PATHS,
+  WLLAMA_COMPAT_PATHS,
+} from '../config';
 import {
   InferenceParams,
   RuntimeInfo,
@@ -88,7 +92,7 @@ const newWllamaInstance = () => {
     logger: DebugLogger,
     modelManager,
   });
-  instance.setCompat('default', 'firefox_safari');
+  instance.setCompat(WLLAMA_COMPAT_PATHS, 'firefox_safari');
   return instance;
 };
 const getInitialParams = (): InferenceParams => {

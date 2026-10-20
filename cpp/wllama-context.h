@@ -42,6 +42,19 @@ int main_test_backend_ops(int, char **)
   glue_inbuf inbuf(req_raw);    \
   req.handler.deserialize(inbuf);
 
+static __attribute__((noinline)) std::vector<llama_token> collect_eog_tokens(const llama_vocab * vocab, int32_t n_vocab)
+{
+  std::vector<llama_token> result;
+  for (int i = 0; i < n_vocab; i++)
+  {
+    if (llama_vocab_is_eog(vocab, i))
+    {
+      result.push_back(i);
+    }
+  }
+  return result;
+}
+
 // for debugging
 enum TEST_STACK_TRACE
 {
@@ -601,17 +614,8 @@ struct wllama_context
     auto metadata = dump_metadata();
 
     // get EOG tokens
-    std::vector<llama_token> list_tokens_eog;
     auto n_vocab = llama_vocab_n_tokens(vocab);
-    {
-      for (int i = 0; i < n_vocab; i++)
-      {
-        if (llama_vocab_is_eog(vocab, i))
-        {
-          list_tokens_eog.push_back(i);
-        }
-      }
-    }
+    auto list_tokens_eog = collect_eog_tokens(vocab, n_vocab);
 
     // multimodal
     auto server_meta = ctx_server.get_meta();

@@ -56,6 +56,9 @@ if (WLLAMA_COMPAT)
     list(APPEND WLLAMA_LINK_OPTIONS
         -fexceptions
         -sASYNCIFY=1
+        # Vocabulary setup reads metadata synchronously.
+        "-sASYNCIFY_REMOVE=[\"llama_vocab::impl::load*\",\"llama_model_base::load_vocab*\"]"
+        -sBINARYEN_EXTRA_PASSES=--one-caller-inline-max-function-size=0
         -sASYNCIFY_ADD=['wllama_start','wllama_action']
     )
 else()

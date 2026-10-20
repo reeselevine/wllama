@@ -156,7 +156,7 @@ export class ProxyToWorker {
     };
     const completeCode: string = [
       `const RUN_OPTIONS = ${JSON.stringify(runOptions)};`,
-      `function wModuleInit() { ${mainModuleCode}; return Module; }`,
+      `function wModuleInit() { ${mainModuleCode}\n; return Module; }`,
       LLAMA_CPP_WORKER_CODE,
     ].join(';\n\n');
     this.worker = createWorker(completeCode);

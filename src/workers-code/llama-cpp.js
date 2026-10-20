@@ -296,8 +296,11 @@ const _wllama_js_file_read = async (path, offset, req_size, out_ptr) => {
   }
 
   const bytes = new Uint8Array(data);
+  const byteLength = bytes.byteLength;
   getHeapU8().set(bytes, out_ptr);
-  return toSizeT(bytes.length);
+  // Release the file chunk after copying it into WASM memory.
+  data.transfer?.(0);
+  return toSizeT(byteLength);
 };
 
 //////////////////////////////////////////////////////////////
